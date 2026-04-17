@@ -1,5 +1,4 @@
-<!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
-
-This version has breaking changes â€” APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
-<!-- END:nextjs-agent-rules -->
+# Reglas de la App para Pedirme
+- Usar arquitectura limpia.
+- El idioma principal del código debe ser Inglés, pero los comentarios en Español.
+- Priorizar la simplicidad y el rendimiento.
