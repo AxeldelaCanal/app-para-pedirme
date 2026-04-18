@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import RideCard from '@/components/RideCard'
 import { supabase } from '@/lib/supabase'
@@ -48,10 +48,29 @@ export default function Dashboard() {
   const [search, setSearch] = useState('')
   const [sortByProximity, setSortByProximity] = useState(false)
 
+  const prevRidesRef = useRef<Ride[]>([])
+
   const fetchRides = useCallback(async () => {
     const res = await fetch('/api/rides')
     if (!res.ok) return
-    setRides(await res.json())
+    const fresh: Ride[] = await res.json()
+
+    // Notificar cuando aparece un nuevo pending_changes
+    if (Notification.permission === 'granted') {
+      fresh.forEach(r => {
+        if (!r.pending_changes) return
+        const prev = prevRidesRef.current.find(p => p.id === r.id)
+        if (!prev?.pending_changes) {
+          new Notification('Cliente propuso cambios ✏️', {
+            body: `${r.client_name} modificó un viaje aceptado`,
+            icon: '/favicon.svg',
+          })
+        }
+      })
+    }
+
+    prevRidesRef.current = fresh
+    setRides(fresh)
     setLoading(false)
   }, [])
 
