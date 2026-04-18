@@ -231,22 +231,39 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
         <div className="rounded-xl bg-amber-50 border-2 border-amber-300 px-4 py-3 flex flex-col gap-2.5">
           <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">El cliente propuso cambios</p>
           <div className="flex flex-col gap-1.5 text-xs">
-            {(Object.entries(ride.pending_changes) as [keyof PendingChanges, unknown][])
-              .filter(([k]) => ['scheduled_at', 'origin', 'destination', 'price_ars'].includes(k))
-              .map(([key, val]) => {
-                const labels: Partial<Record<keyof PendingChanges, string>> = {
-                  scheduled_at: 'Horario',
-                  origin: 'Origen',
-                  destination: 'Destino',
-                  price_ars: 'Precio',
-                }
-                return (
-                  <div key={key} className="flex justify-between gap-2">
-                    <span className="text-amber-700 font-medium">{labels[key]}</span>
-                    <span className="text-amber-900 font-semibold text-right">{diffLabel(key, val)}</span>
+            {ride.pending_changes.destinations ? (
+              <>
+                <div className="flex justify-between gap-2">
+                  <span className="text-amber-700 font-medium">Paradas</span>
+                  <span className="text-amber-900 font-semibold text-right">
+                    {ride.pending_changes.destinations.map(d => d.address.split(',')[0]).join(' → ')}
+                  </span>
+                </div>
+                {ride.pending_changes.price_ars && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-amber-700 font-medium">Nuevo precio</span>
+                    <span className="text-amber-900 font-semibold">${ride.pending_changes.price_ars.toLocaleString('es-AR')}</span>
                   </div>
-                )
-              })}
+                )}
+              </>
+            ) : (
+              (Object.entries(ride.pending_changes) as [keyof PendingChanges, unknown][])
+                .filter(([k]) => ['scheduled_at', 'origin', 'destination', 'price_ars'].includes(k))
+                .map(([key, val]) => {
+                  const labels: Partial<Record<keyof PendingChanges, string>> = {
+                    scheduled_at: 'Horario',
+                    origin: 'Origen',
+                    destination: 'Destino',
+                    price_ars: 'Precio',
+                  }
+                  return (
+                    <div key={key} className="flex justify-between gap-2">
+                      <span className="text-amber-700 font-medium">{labels[key]}</span>
+                      <span className="text-amber-900 font-semibold text-right">{diffLabel(key, val)}</span>
+                    </div>
+                  )
+                })
+            )}
           </div>
           <div className="flex gap-2 pt-1">
             <button

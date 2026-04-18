@@ -87,31 +87,31 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
       ? ride.destinations
       : [{ address: ride.destination, lat: ride.destination_lat, lng: ride.destination_lng }]
     const newDests = [...dests, newStop]
+    const lastDest = newStop
+    const changes = {
+      destinations: newDests,
+      destination: lastDest.address,
+      destination_lat: lastDest.lat,
+      destination_lng: lastDest.lng,
+      distance_km: newEstimate.distance_km,
+      duration_min: newEstimate.duration_min,
+      price_ars: newEstimate.price_ars,
+    }
+
+    const isInProgress = ride.current_stop_index !== null && ride.current_stop_index !== undefined
+    const body = isInProgress ? changes : { pending_changes: changes }
 
     await fetch(`/api/rides/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        destinations: newDests,
-        destination: newStop.address,
-        destination_lat: newStop.lat,
-        destination_lng: newStop.lng,
-        distance_km: newEstimate.distance_km,
-        duration_min: newEstimate.duration_min,
-        price_ars: newEstimate.price_ars,
-      }),
+      body: JSON.stringify(body),
     })
 
-    setRide(r => r ? {
-      ...r,
-      destinations: newDests,
-      destination: newStop.address,
-      destination_lat: newStop.lat,
-      destination_lng: newStop.lng,
-      distance_km: newEstimate.distance_km,
-      duration_min: newEstimate.duration_min,
-      price_ars: newEstimate.price_ars,
-    } : null)
+    if (isInProgress) {
+      setRide(r => r ? { ...r, ...changes } : null)
+    } else {
+      setRide(r => r ? { ...r, pending_changes: changes } : null)
+    }
 
     setAddStopState('idle')
     setNewStop(null)
@@ -143,21 +143,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
     setRemoveSaving(true)
     const newDests = dests.filter((_, i) => i !== removeIdx)
     const lastDest = newDests[newDests.length - 1]
-    await fetch(`/api/rides/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        destinations: newDests,
-        destination: lastDest.address,
-        destination_lat: lastDest.lat,
-        destination_lng: lastDest.lng,
-        distance_km: removeEstimate.distance_km,
-        duration_min: removeEstimate.duration_min,
-        price_ars: removeEstimate.price_ars,
-      }),
-    })
-    setRide(r => r ? {
-      ...r,
+    const changes = {
       destinations: newDests,
       destination: lastDest.address,
       destination_lat: lastDest.lat,
@@ -165,7 +151,22 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
       distance_km: removeEstimate.distance_km,
       duration_min: removeEstimate.duration_min,
       price_ars: removeEstimate.price_ars,
-    } : null)
+    }
+
+    const isInProgress = ride.current_stop_index !== null && ride.current_stop_index !== undefined
+    const body = isInProgress ? changes : { pending_changes: changes }
+
+    await fetch(`/api/rides/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    if (isInProgress) {
+      setRide(r => r ? { ...r, ...changes } : null)
+    } else {
+      setRide(r => r ? { ...r, pending_changes: changes } : null)
+    }
     setRemoveIdx(null)
     setRemoveEstimate(null)
     setRemoveSaving(false)
