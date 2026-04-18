@@ -9,7 +9,7 @@ import type { Location, Ride } from '@/types'
 const LocationInput = dynamic(() => import('@/components/LocationInput'), { ssr: false })
 
 type CancelState = 'idle' | 'confirming' | 'loading' | 'done'
-type AddStopState = 'idle' | 'selecting' | 'price_loading' | 'confirming' | 'saving'
+type AddStopState = 'idle' | 'selecting' | 'price_loading' | 'confirming' | 'saving' | 'sent'
 
 export default function Confirmation({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -109,11 +109,11 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
 
     if (isInProgress) {
       setRide(r => r ? { ...r, ...changes } : null)
+      setAddStopState('idle')
     } else {
       setRide(r => r ? { ...r, pending_changes: changes } : null)
+      setAddStopState('sent')
     }
-
-    setAddStopState('idle')
     setNewStop(null)
     setNewEstimate(null)
     setStopKey(k => k + 1)
@@ -379,6 +379,13 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
               {addStopState === 'saving' && (
                 <div className="w-full rounded-2xl bg-gray-50 border border-gray-200 py-4 text-sm text-gray-500 text-center">
                   Guardando parada...
+                </div>
+              )}
+
+              {addStopState === 'sent' && (
+                <div className="w-full rounded-2xl bg-amber-50 border border-amber-200 px-4 py-4 flex flex-col gap-1 text-center">
+                  <p className="text-sm font-semibold text-amber-800">Solicitud enviada ✏️</p>
+                  <p className="text-xs text-amber-600">El conductor revisará el cambio y te confirmará.</p>
                 </div>
               )}
             </div>
