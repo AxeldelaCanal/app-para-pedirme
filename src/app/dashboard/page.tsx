@@ -93,8 +93,11 @@ export default function Dashboard() {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'rides' },
-        (payload) => {
-          const updated = payload.new as Ride
+        async (payload) => {
+          const partial = payload.new as Ride
+          // Re-fetchear el ride completo para garantizar que JSONB (pending_changes, destinations) estén presentes
+          const res = await fetch(`/api/rides/${partial.id}`)
+          const updated: Ride = res.ok ? await res.json() : partial
           setRides(prev => prev.map(r => r.id === updated.id ? updated : r))
           if (Notification.permission === 'granted' && updated.status === 'cancelled') {
             new Notification('Viaje cancelado ❌', {
@@ -104,7 +107,13 @@ export default function Dashboard() {
           }
           if (Notification.permission === 'granted' && updated.status === 'pending') {
             new Notification('Pedido modificado 🕐', {
-              body: `${updated.client_name} cambió el horario de su viaje`,
+              body: `${updated.client_name} cambió su viaje`,
+              icon: '/favicon.ico',
+            })
+          }
+          if (Notification.permission === 'granted' && updated.pending_changes) {
+            new Notification('Cliente propuso cambios ✏️', {
+              body: `${updated.client_name} modificó un viaje aceptado`,
               icon: '/favicon.ico',
             })
           }
