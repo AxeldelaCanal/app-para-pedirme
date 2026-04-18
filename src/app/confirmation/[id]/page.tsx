@@ -20,6 +20,9 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
   const [newStop, setNewStop] = useState<Location | null>(null)
   const [newEstimate, setNewEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
   const [stopKey, setStopKey] = useState(0)
+  const [removeIdx, setRemoveIdx] = useState<number | null>(null)
+  const [removeEstimate, setRemoveEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
+  const [removeSaving, setRemoveSaving] = useState(false)
 
   useEffect(() => {
     fetch(`/api/rides/${id}`)
@@ -116,6 +119,58 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
     setStopKey(k => k + 1)
   }
 
+  async function handleRemoveStop(idx: number) {
+    if (!ride) return
+    setRemoveIdx(idx)
+    const newDests = dests.filter((_, i) => i !== idx)
+    const waypoints = [
+      { lat: ride.origin_lat, lng: ride.origin_lng },
+      ...newDests.map(d => ({ lat: d.lat, lng: d.lng })),
+    ]
+    try {
+      const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
+      const res = await fetch(`/api/price?${params}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setRemoveEstimate(data)
+    } catch {
+      setRemoveIdx(null)
+    }
+  }
+
+  async function confirmRemoveStop() {
+    if (!ride || removeIdx === null || !removeEstimate) return
+    setRemoveSaving(true)
+    const newDests = dests.filter((_, i) => i !== removeIdx)
+    const lastDest = newDests[newDests.length - 1]
+    await fetch(`/api/rides/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        destinations: newDests,
+        destination: lastDest.address,
+        destination_lat: lastDest.lat,
+        destination_lng: lastDest.lng,
+        distance_km: removeEstimate.distance_km,
+        duration_min: removeEstimate.duration_min,
+        price_ars: removeEstimate.price_ars,
+      }),
+    })
+    setRide(r => r ? {
+      ...r,
+      destinations: newDests,
+      destination: lastDest.address,
+      destination_lat: lastDest.lat,
+      destination_lng: lastDest.lng,
+      distance_km: removeEstimate.distance_km,
+      duration_min: removeEstimate.duration_min,
+      price_ars: removeEstimate.price_ars,
+    } : null)
+    setRemoveIdx(null)
+    setRemoveEstimate(null)
+    setRemoveSaving(false)
+  }
+
   function cancelAddStop() {
     setAddStopState('idle')
     setNewStop(null)
@@ -185,11 +240,24 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
                 <span className="text-gray-700">{ride.origin.split(',')[0]}</span>
               </div>
               {dests.map((d, i) => (
-                <div key={i} className="flex gap-2 items-start">
-                  <span className={`shrink-0 mt-0.5 ${i === dests.length - 1 ? 'text-red-400' : 'text-blue-400'}`}>
-                    {i === dests.length - 1 ? '↓' : '◎'}
-                  </span>
-                  <span className="text-gray-700">{d.address.split(',')[0]}</span>
+                <div key={i} className="flex gap-2 items-start justify-between">
+                  <div className="flex gap-2 items-start min-w-0">
+                    <span className={`shrink-0 mt-0.5 ${i === dests.length - 1 ? 'text-red-400' : 'text-blue-400'}`}>
+                      {i === dests.length - 1 ? '↓' : '◎'}
+                    </span>
+                    <span className="text-gray-700 truncate">{d.address.split(',')[0]}</span>
+                  </div>
+                  {canAddStop && dests.length > 1 && removeIdx === null && (
+                    <button
+                      onClick={() => handleRemoveStop(i)}
+                      className="shrink-0 text-gray-300 hover:text-red-400 transition-colors ml-2"
+                      aria-label="Eliminar parada"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               ))}
               <div className="flex justify-between pt-1 border-t border-gray-200 text-xs text-gray-500">
@@ -200,6 +268,43 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
                 </span>
                 <span className="font-semibold text-gray-900">${ride.price_ars.toLocaleString('es-AR')}</span>
               </div>
+            </div>
+          )}
+
+          {/* Confirmar eliminación de parada */}
+          {removeIdx !== null && (
+            <div className="w-full rounded-2xl bg-red-50 border border-red-200 px-4 py-3 flex flex-col gap-3 text-sm text-left">
+              {!removeEstimate ? (
+                <p className="text-red-600 text-center">Recalculando precio...</p>
+              ) : (
+                <>
+                  <p className="text-red-800 font-semibold">¿Eliminar parada?</p>
+                  <div className="flex justify-between text-red-600">
+                    <span>Precio actual</span>
+                    <span className="line-through">${ride!.price_ars.toLocaleString('es-AR')}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-red-900">
+                    <span>Nuevo precio</span>
+                    <span>${removeEstimate.price_ars.toLocaleString('es-AR')}</span>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setRemoveIdx(null); setRemoveEstimate(null) }}
+                      disabled={removeSaving}
+                      className="flex-1 rounded-2xl border border-gray-200 py-3 font-semibold text-gray-600 disabled:opacity-40"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={confirmRemoveStop}
+                      disabled={removeSaving}
+                      className="flex-1 rounded-2xl bg-red-500 py-3 font-semibold text-white disabled:opacity-40"
+                    >
+                      {removeSaving ? 'Guardando...' : 'Confirmar'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
