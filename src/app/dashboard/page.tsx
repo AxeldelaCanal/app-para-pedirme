@@ -69,6 +69,8 @@ export default function Dashboard() {
       setNotifPermission(Notification.permission)
     }
 
+    const poll = setInterval(fetchRides, 15_000);
+
     const channel = supabase
       .channel('rides-realtime')
       .on(
@@ -121,7 +123,7 @@ export default function Dashboard() {
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [fetchRides])
 
   function handleStatusChange(id: string, status: RideStatus) {
