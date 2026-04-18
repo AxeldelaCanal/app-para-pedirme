@@ -113,7 +113,7 @@ export default function Dashboard() {
       setNotifPermission(Notification.permission)
     }
 
-    const poll = setInterval(fetchRides, 15_000);
+    const poll = setInterval(fetchRides, 10_000);
 
     const channel = supabase
       .channel('rides-realtime')
