@@ -55,14 +55,39 @@ export default function Dashboard() {
     if (!res.ok) return
     const fresh: Ride[] = await res.json()
 
-    // Notificar cuando aparece un nuevo pending_changes
-    if (Notification.permission === 'granted') {
+    if (Notification.permission === 'granted' && prevRidesRef.current.length > 0) {
       fresh.forEach(r => {
-        if (!r.pending_changes) return
         const prev = prevRidesRef.current.find(p => p.id === r.id)
-        if (!prev?.pending_changes) {
+
+        // Nuevo pedido
+        if (!prev) {
+          new Notification('Nuevo pedido 🚗', {
+            body: `${r.client_name} · ${r.origin.split(',')[0]} → ${r.destination.split(',')[0]}`,
+            icon: '/favicon.svg',
+          })
+          return
+        }
+
+        // Cambios propuestos
+        if (r.pending_changes && !prev.pending_changes) {
           new Notification('Cliente propuso cambios ✏️', {
             body: `${r.client_name} modificó un viaje aceptado`,
+            icon: '/favicon.svg',
+          })
+        }
+
+        // Cancelación
+        if (r.status === 'cancelled' && prev.status !== 'cancelled') {
+          new Notification('Viaje cancelado ❌', {
+            body: `${r.client_name} canceló su viaje`,
+            icon: '/favicon.svg',
+          })
+        }
+
+        // Volvió a pendiente (editó horario/lugar)
+        if (r.status === 'pending' && prev.status === 'accepted') {
+          new Notification('Pedido modificado 🕐', {
+            body: `${r.client_name} cambió su viaje`,
             icon: '/favicon.svg',
           })
         }
