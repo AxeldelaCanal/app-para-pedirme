@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { sendPush } from '@/lib/push'
 import type { RideStatus, PendingChanges } from '@/types'
 
 export async function GET(
@@ -71,6 +72,44 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notificar al conductor por acciones del cliente: cancelación, cambios propuestos, ride vuelto a pendiente
+  const needsPush =
+    body.status === 'cancelled' ||
+    (body.pending_changes != null) ||
+    (body.status === 'pending' && (body.origin || body.scheduled_at || body.destinations))
+
+  if (needsPush) {
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('push_subscription')
+      .eq('id', 1)
+      .single()
+
+    if (settingsRow?.push_subscription) {
+      const sub = settingsRow.push_subscription as Parameters<typeof sendPush>[0]
+      if (body.status === 'cancelled') {
+        await sendPush(sub, {
+          title: 'Viaje cancelado ❌',
+          body: `${data.client_name} canceló su viaje`,
+          tag: 'cancelled',
+        })
+      } else if (body.pending_changes != null) {
+        await sendPush(sub, {
+          title: 'Cliente propuso cambios ✏️',
+          body: `${data.client_name} modificó un viaje aceptado`,
+          tag: 'pending-changes',
+        })
+      } else if (body.status === 'pending') {
+        await sendPush(sub, {
+          title: 'Pedido modificado 🕐',
+          body: `${data.client_name} cambió su viaje`,
+          tag: 'modified',
+        })
+      }
+    }
+  }
+
   return NextResponse.json(data)
 }
 

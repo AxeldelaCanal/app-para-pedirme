@@ -50,6 +50,13 @@ export default function Dashboard() {
 
   const prevRidesRef = useRef<Ride[]>([])
 
+  function urlBase64ToUint8Array(base64: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+    const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const raw = window.atob(b64)
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+  }
+
   const fetchRides = useCallback(async () => {
     const res = await fetch('/api/rides')
     if (!res.ok) return
@@ -99,9 +106,34 @@ export default function Dashboard() {
     setLoading(false)
   }, [])
 
+  async function registerPushSubscription() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js')
+      await navigator.serviceWorker.ready
+
+      const existing = await reg.pushManager.getSubscription()
+      const sub = existing ?? await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '') as unknown as ArrayBuffer,
+      })
+
+      await fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub),
+      })
+    } catch (err) {
+      console.error('[push] Error registrando suscripción:', err)
+    }
+  }
+
   async function requestNotifications() {
     const permission = await Notification.requestPermission()
     setNotifPermission(permission)
+    if (permission === 'granted') {
+      await registerPushSubscription()
+    }
   }
 
   useEffect(() => {
@@ -111,6 +143,10 @@ export default function Dashboard() {
     })
     if ('Notification' in window) {
       setNotifPermission(Notification.permission)
+      // Si ya tiene permiso, registrar SW y suscripción push
+      if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(console.error)
+      }
     }
 
     const poll = setInterval(fetchRides, 10_000);

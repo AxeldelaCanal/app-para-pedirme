@@ -43,6 +43,7 @@ export interface Settings {
   price_per_min: number
   booking_fee: number
   driver_phone?: string
+  push_subscription?: PushSubscriptionJSON | null
   updated_at: string
 }
 
