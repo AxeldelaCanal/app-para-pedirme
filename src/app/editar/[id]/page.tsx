@@ -3,9 +3,84 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Ride, Location } from '@/types'
 
 const LocationInput = dynamic(() => import('@/components/LocationInput'), { ssr: false })
+
+interface SortableDestProps {
+  id: string
+  dest: Location
+  index: number
+  label: string
+  showRemove: boolean
+  onRemove: () => void
+  onChange: (loc: Location) => void
+}
+
+function SortableDest({ id, dest, label, showRemove, onRemove, onChange }: SortableDestProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-2 items-end">
+      {/* drag handle */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="mb-1 p-2 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+        aria-label="Mover parada"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16" />
+        </svg>
+      </button>
+
+      <div className="flex-1">
+        <LocationInput
+          label={label}
+          placeholder="Ej: Shopping Los Gallegos"
+          value={dest.address}
+          onChange={onChange}
+        />
+      </div>
+
+      {showRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="mb-1 p-2 text-gray-400 hover:text-red-400 transition-colors rounded-lg border border-gray-200"
+          aria-label="Eliminar destino"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function EditarPedido() {
   const router = useRouter()
@@ -13,6 +88,8 @@ export default function EditarPedido() {
   const [ride, setRide] = useState<Ride | null>(null)
   const [origin, setOrigin] = useState<Location | null>(null)
   const [destinations, setDestinations] = useState<Location[]>([])
+  // stable IDs for dnd-kit — index isn't stable after reorder
+  const [destIds, setDestIds] = useState<string[]>([])
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [newPrice, setNewPrice] = useState<number | null>(null)
@@ -23,6 +100,11 @@ export default function EditarPedido() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
 
   const today = (() => {
     const d = new Date()
@@ -42,6 +124,7 @@ export default function EditarPedido() {
           ? data.destinations
           : [{ address: data.destination, lat: data.destination_lat, lng: data.destination_lng }]
         setDestinations(dests)
+        setDestIds(dests.map((_, i) => `dest-${i}-${Date.now()}`))
         const d = new Date(data.scheduled_at)
         setDate(d.toISOString().split('T')[0])
         setTime(d.toTimeString().slice(0, 5))
@@ -67,13 +150,27 @@ export default function EditarPedido() {
   }
 
   function addDestination() {
+    const newId = `dest-new-${Date.now()}`
     setDestinations(prev => [...prev, { address: '', lat: 0, lng: 0 }])
+    setDestIds(prev => [...prev, newId])
     setLocationsChanged(true)
     setNewPrice(null)
   }
 
   function removeDestination(i: number) {
     setDestinations(prev => prev.filter((_, j) => j !== i))
+    setDestIds(prev => prev.filter((_, j) => j !== i))
+    setLocationsChanged(true)
+    setNewPrice(null)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = destIds.indexOf(active.id as string)
+    const newIndex = destIds.indexOf(over.id as string)
+    setDestinations(prev => arrayMove(prev, oldIndex, newIndex))
+    setDestIds(prev => arrayMove(prev, oldIndex, newIndex))
     setLocationsChanged(true)
     setNewPrice(null)
   }
@@ -198,30 +295,25 @@ export default function EditarPedido() {
                 />
               )}
 
-              {/* Destinos */}
-              {destinations.map((dest, i) => (
-                <div key={i} className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <LocationInput
-                      label={destLabel(i)}
-                      placeholder="Ej: Shopping Los Gallegos"
-                      value={dest.address}
-                      onChange={loc => handleDestChange(i, loc)}
-                    />
+              {/* Destinos — drag & drop */}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={destIds} strategy={verticalListSortingStrategy}>
+                  <div className="flex flex-col gap-3">
+                    {destinations.map((dest, i) => (
+                      <SortableDest
+                        key={destIds[i]}
+                        id={destIds[i]}
+                        dest={dest}
+                        index={i}
+                        label={destLabel(i)}
+                        showRemove={destinations.length > 1}
+                        onRemove={() => removeDestination(i)}
+                        onChange={loc => handleDestChange(i, loc)}
+                      />
+                    ))}
                   </div>
-                  {destinations.length > 1 && (
-                    <button
-                      onClick={() => removeDestination(i)}
-                      className="mb-1 p-2 text-gray-400 hover:text-red-400 transition-colors rounded-lg border border-gray-200"
-                      aria-label="Eliminar destino"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
+                </SortableContext>
+              </DndContext>
 
               <button
                 onClick={addDestination}
