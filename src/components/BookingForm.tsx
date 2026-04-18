@@ -60,9 +60,9 @@ export default function BookingForm() {
     setForm(f => ({ ...f, destinations: f.destinations.filter((_, j) => j !== i) }))
   }
 
-  // Step 3: auto-fetch price when arriving
+  // Step 2: auto-fetch price when arriving
   useEffect(() => {
-    if (step !== 3) return
+    if (step !== 2) return
     if (!form.origin || form.destinations.some(d => !d)) return
     const validDests = form.destinations as Location[]
     setLoading(true)
@@ -121,14 +121,14 @@ export default function BookingForm() {
 
   const validDests = form.destinations.filter(Boolean) as Location[]
   const canStep1 = !!form.origin && form.destinations.length > 0 && validDests.length === form.destinations.length
-  const canStep2 = (() => {
+  const canDateTime = (() => {
     if (!form.date || !form.time) return false
     const selected = new Date(`${form.date}T${form.time}`)
     const minTime = new Date()
     minTime.setMinutes(minTime.getMinutes() + 30)
     return selected >= minTime
   })()
-  const timeError = form.date && form.time && !canStep2
+  const timeError = form.date && form.time && !canDateTime
     ? 'El viaje debe ser con al menos 30 minutos de anticipación' : ''
 
   const isValidArgPhone = (p: string) => /^(11|15|2\d{2,3}|3\d{2,3})\d{6,8}$/.test(p.replace(/\D/g, ''))
@@ -215,13 +215,65 @@ export default function BookingForm() {
         </div>
       )}
 
-      {/* Paso 2 — Fecha y hora */}
+      {/* Paso 2 — Precio */}
       {step === 2 && (
         <div className="flex flex-col gap-5">
           <div>
             <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 2 de 4</p>
+            <h2 className="text-2xl font-bold text-gray-900">Tu precio</h2>
+          </div>
+
+          {loading && (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-center text-sm text-gray-400">
+              Calculando precio...
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {estimate && !loading && (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 flex flex-col gap-3 text-sm">
+              <Row label="Origen" value={form.origin?.address ?? ''} />
+              {form.destinations.map((d, i) => (
+                <Row key={i} label={destLabel(i, form.destinations.length)} value={d?.address ?? ''} />
+              ))}
+              <Row label="Distancia" value={`${estimate.distance_km.toFixed(1)} km`} />
+              <Row label="Duración estimada" value={`${Math.round(estimate.duration_min)} min`} />
+              <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
+                <span className="font-semibold text-gray-700">Total estimado</span>
+                <span className="text-2xl font-bold text-slate-900">${estimate.price_ars.toLocaleString('es-AR')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => setStep(1)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
+              ← Atrás
+            </button>
+            <button
+              onClick={() => setStep(3)}
+              disabled={!estimate || loading}
+              className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
+            >
+              Continuar →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Paso 3 — Fecha y hora */}
+      {step === 3 && (
+        <div className="flex flex-col gap-5">
+          <div>
+            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 3 de 4</p>
             <h2 className="text-2xl font-bold text-gray-900">¿Cuándo?</h2>
           </div>
+          {estimate && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5 flex justify-between items-center text-sm">
+              <span className="text-emerald-700">Total estimado</span>
+              <span className="font-bold text-emerald-700">${estimate.price_ars.toLocaleString('es-AR')}</span>
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Fecha</label>
             <input
@@ -244,59 +296,12 @@ export default function BookingForm() {
           </div>
           {timeError && <p className="text-xs text-red-500">{timeError}</p>}
           <div className="flex gap-3">
-            <button onClick={() => setStep(1)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
-              ← Atrás
-            </button>
-            <button
-              onClick={() => { setEstimate(null); setStep(3) }}
-              disabled={!canStep2}
-              className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
-            >
-              Ver precio →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Paso 3 — Precio */}
-      {step === 3 && (
-        <div className="flex flex-col gap-5">
-          <div>
-            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 3 de 4</p>
-            <h2 className="text-2xl font-bold text-gray-900">Tu precio</h2>
-          </div>
-
-          {loading && (
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-center text-sm text-gray-400">
-              Calculando precio...
-            </div>
-          )}
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          {estimate && !loading && (
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 flex flex-col gap-3 text-sm">
-              <Row label="Origen" value={form.origin?.address ?? ''} />
-              {form.destinations.map((d, i) => (
-                <Row key={i} label={destLabel(i, form.destinations.length)} value={d?.address ?? ''} />
-              ))}
-              <Row label="Fecha" value={`${form.date} ${form.time}`} />
-              <Row label="Distancia" value={`${estimate.distance_km.toFixed(1)} km`} />
-              <Row label="Duración estimada" value={`${Math.round(estimate.duration_min)} min`} />
-              <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
-                <span className="font-semibold text-gray-700">Total estimado</span>
-                <span className="text-2xl font-bold text-slate-900">${estimate.price_ars.toLocaleString('es-AR')}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
             <button onClick={() => setStep(2)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
               ← Atrás
             </button>
             <button
               onClick={() => setStep(4)}
-              disabled={!estimate || loading}
+              disabled={!canDateTime}
               className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
             >
               Continuar →
