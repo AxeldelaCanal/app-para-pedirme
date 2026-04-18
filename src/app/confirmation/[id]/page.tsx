@@ -9,7 +9,7 @@ import type { Location, Ride } from '@/types'
 const LocationInput = dynamic(() => import('@/components/LocationInput'), { ssr: false })
 
 type CancelState = 'idle' | 'confirming' | 'loading' | 'done'
-type AddStopState = 'idle' | 'selecting' | 'price_loading' | 'confirming' | 'saving' | 'sent'
+type AddStopState = 'idle' | 'selecting' | 'positioning' | 'price_loading' | 'confirming' | 'saving' | 'sent'
 
 export default function Confirmation({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -20,6 +20,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
   const [newStop, setNewStop] = useState<Location | null>(null)
   const [newEstimate, setNewEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
   const [stopKey, setStopKey] = useState(0)
+  const [insertPosition, setInsertPosition] = useState<number | null>(null)
   const [removeIdx, setRemoveIdx] = useState<number | null>(null)
   const [removeEstimate, setRemoveEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
   const [removeSaving, setRemoveSaving] = useState(false)
@@ -55,16 +56,19 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
   async function handleNewStopSelected(stop: Location) {
     if (!ride) return
     setNewStop(stop)
+    setInsertPosition(dests.length) // default: al final
+    setAddStopState('positioning')
+  }
+
+  async function confirmPosition(pos: number) {
+    if (!ride || !newStop) return
+    setInsertPosition(pos)
     setAddStopState('price_loading')
 
-    const dests = ride.destinations?.length
-      ? ride.destinations
-      : [{ address: ride.destination, lat: ride.destination_lat, lng: ride.destination_lng }]
-
+    const newDests = [...dests.slice(0, pos), newStop, ...dests.slice(pos)]
     const waypoints = [
       { lat: ride.origin_lat, lng: ride.origin_lng },
-      ...dests.map(d => ({ lat: d.lat, lng: d.lng })),
-      { lat: stop.lat, lng: stop.lng },
+      ...newDests.map(d => ({ lat: d.lat, lng: d.lng })),
     ]
 
     try {
@@ -75,7 +79,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
       setNewEstimate(data)
       setAddStopState('confirming')
     } catch {
-      setAddStopState('selecting')
+      setAddStopState('positioning')
     }
   }
 
@@ -86,8 +90,9 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
     const dests = ride.destinations?.length
       ? ride.destinations
       : [{ address: ride.destination, lat: ride.destination_lat, lng: ride.destination_lng }]
-    const newDests = [...dests, newStop]
-    const lastDest = newStop
+    const pos = insertPosition ?? dests.length
+    const newDests = [...dests.slice(0, pos), newStop, ...dests.slice(pos)]
+    const lastDest = newDests[newDests.length - 1]
     const changes = {
       destinations: newDests,
       destination: lastDest.address,
@@ -176,6 +181,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
     setAddStopState('idle')
     setNewStop(null)
     setNewEstimate(null)
+    setInsertPosition(null)
     setStopKey(k => k + 1)
   }
 
@@ -334,6 +340,33 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
                     value=""
                     onChange={handleNewStopSelected}
                   />
+                  <button onClick={cancelAddStop} className="text-sm text-gray-400 underline self-start">
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {addStopState === 'positioning' && newStop && (
+                <div className="flex flex-col gap-3 text-left">
+                  <p className="text-sm font-semibold text-gray-700">¿Dónde insertás <span className="text-blue-600">{newStop.address.split(',')[0]}</span>?</p>
+                  <div className="flex flex-col gap-2">
+                    {[...Array(dests.length + 1)].map((_, pos) => {
+                      const label = pos === 0
+                        ? `Antes de: ${dests[0].address.split(',')[0]}`
+                        : pos === dests.length
+                          ? `Al final (después de: ${dests[dests.length - 1].address.split(',')[0]})`
+                          : `Entre: ${dests[pos - 1].address.split(',')[0]} y ${dests[pos].address.split(',')[0]}`
+                      return (
+                        <button
+                          key={pos}
+                          onClick={() => confirmPosition(pos)}
+                          className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 font-medium text-left"
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
                   <button onClick={cancelAddStop} className="text-sm text-gray-400 underline self-start">
                     Cancelar
                   </button>

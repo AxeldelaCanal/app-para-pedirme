@@ -74,6 +74,25 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       })
       const updated = await res.json()
       onRideUpdate(ride.id, updated)
+
+      if (action === 'accept_changes') {
+        const phone = `54${updated.client_phone.replace(/\D/g, '')}`
+        const updatedDests = updated.destinations?.length
+          ? updated.destinations
+          : [{ address: updated.destination }]
+        const routeText = updatedDests.length === 1
+          ? `🏁 Destino: ${updatedDests[0].address}`
+          : updatedDests.map((d: { address: string }, i: number) =>
+              i === updatedDests.length - 1
+                ? `🏁 Destino final: ${d.address}`
+                : `🔵 Parada ${i + 1}: ${d.address}`
+            ).join('\n')
+        const sd = new Date(updated.scheduled_at)
+        const dateStr = sd.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })
+        const timeStr = sd.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+        const msg = `¡Hola ${updated.client_name}! ✅ Acepté los cambios a tu viaje del ${dateStr} a las ${timeStr}.\n📍 Origen: ${updated.origin}\n${routeText}\n💰 Total: $${updated.price_ars.toLocaleString('es-AR')}`
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+      }
     } finally {
       setLoading(false)
     }
