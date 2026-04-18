@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Ride, RideStatus } from '@/types'
+import type { Ride, RideStatus, PendingChanges } from '@/types'
 import { detectConflict } from '@/lib/scheduling'
 
 interface Props {
@@ -62,6 +62,32 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       ? `¡Hola ${ride.client_name}! ✅ Confirmé tu viaje para el ${dateStr} a las ${timeStr}.\n📍 Origen: ${ride.origin}\n${routeText}\n💰 Total: $${ride.price_ars.toLocaleString('es-AR')}\n\nTe espero puntual. Cualquier consulta escribime acá.\n\n🔗 Si necesitás cancelar o modificar: ${cancelLink}`
       : `Hola ${ride.client_name} 😔 Lamentablemente no voy a poder tomar tu viaje del ${dateStr} a las ${timeStr}.\n\nTe recomiendo reagendar para otro horario o día — con gusto te llevo cuando pueda. ¡Disculpá los inconvenientes!`
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+  }
+
+  async function handlePendingChanges(action: 'accept_changes' | 'reject_changes') {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/rides/${ride.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const updated = await res.json()
+      onRideUpdate(ride.id, updated)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function diffLabel(key: keyof PendingChanges, value: unknown): string {
+    if (key === 'scheduled_at') {
+      const d = new Date(value as string)
+      return `${d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
+    }
+    if (key === 'price_ars') return `$${(value as number).toLocaleString('es-AR')}`
+    if (key === 'origin') return (value as string).split(',')[0]
+    if (key === 'destination') return (value as string).split(',')[0]
+    return String(value)
   }
 
   async function deleteRide() {
@@ -198,6 +224,47 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
         <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
           📝 {ride.notes}
         </p>
+      )}
+
+      {/* Cambios propuestos por el cliente */}
+      {ride.pending_changes && (
+        <div className="rounded-xl bg-amber-50 border-2 border-amber-300 px-4 py-3 flex flex-col gap-2.5">
+          <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">El cliente propuso cambios</p>
+          <div className="flex flex-col gap-1.5 text-xs">
+            {(Object.entries(ride.pending_changes) as [keyof PendingChanges, unknown][])
+              .filter(([k]) => ['scheduled_at', 'origin', 'destination', 'price_ars'].includes(k))
+              .map(([key, val]) => {
+                const labels: Partial<Record<keyof PendingChanges, string>> = {
+                  scheduled_at: 'Horario',
+                  origin: 'Origen',
+                  destination: 'Destino',
+                  price_ars: 'Precio',
+                }
+                return (
+                  <div key={key} className="flex justify-between gap-2">
+                    <span className="text-amber-700 font-medium">{labels[key]}</span>
+                    <span className="text-amber-900 font-semibold text-right">{diffLabel(key, val)}</span>
+                  </div>
+                )
+              })}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => handlePendingChanges('reject_changes')}
+              disabled={loading}
+              className="flex-1 rounded-xl border border-gray-200 py-2 text-xs font-semibold text-gray-600 disabled:opacity-40"
+            >
+              Rechazar
+            </button>
+            <button
+              onClick={() => handlePendingChanges('accept_changes')}
+              disabled={loading}
+              className="flex-1 rounded-xl bg-emerald-500 py-2 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              Aceptar cambios
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Navegación — botón único que alterna entre navegar y confirmar llegada */}

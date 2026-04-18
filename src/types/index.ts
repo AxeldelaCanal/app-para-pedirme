@@ -19,6 +19,21 @@ export interface Ride {
   status: RideStatus
   notes?: string
   created_at: string
+  pending_changes?: PendingChanges | null
+}
+
+export interface PendingChanges {
+  scheduled_at?: string
+  origin?: string
+  origin_lat?: number
+  origin_lng?: number
+  destination?: string
+  destination_lat?: number
+  destination_lng?: number
+  destinations?: Location[]
+  price_ars?: number
+  distance_km?: number
+  duration_min?: number
 }
 
 export interface Settings {

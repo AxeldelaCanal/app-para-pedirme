@@ -101,24 +101,30 @@ export default function EditarPedido() {
     setSaving(true)
     setError('')
     try {
+      const isAccepted = ride?.status === 'accepted'
+      const changes = {
+        scheduled_at: new Date(`${date}T${time}`).toISOString(),
+        origin: origin.address,
+        origin_lat: origin.lat,
+        origin_lng: origin.lng,
+        destination: destination.address,
+        destination_lat: destination.lat,
+        destination_lng: destination.lng,
+        ...(newPrice !== null && {
+          price_ars: newPrice,
+          distance_km: ride?.distance_km,
+          duration_min: ride?.duration_min,
+        }),
+      }
+
+      const body = isAccepted
+        ? { pending_changes: changes }
+        : { ...changes, status: 'pending' }
+
       const res = await fetch(`/api/rides/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scheduled_at: new Date(`${date}T${time}`).toISOString(),
-          origin: origin.address,
-          origin_lat: origin.lat,
-          origin_lng: origin.lng,
-          destination: destination.address,
-          destination_lat: destination.lat,
-          destination_lng: destination.lng,
-          ...(newPrice !== null && {
-            price_ars: newPrice,
-            distance_km: ride?.distance_km,
-            duration_min: ride?.duration_min,
-          }),
-          status: 'pending',
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Error al guardar')
       router.push(`/confirmation/${id}`)
