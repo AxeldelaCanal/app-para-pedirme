@@ -438,7 +438,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
               href={`/editar/${id}`}
               className="w-full rounded-2xl border-2 border-slate-200 py-4 font-semibold text-slate-700 text-center"
             >
-              Modificar fecha u hora
+              Modificar viaje
             </Link>
             <Link
               href="/"

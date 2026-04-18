@@ -12,18 +12,22 @@ export default function EditarPedido() {
   const { id } = useParams<{ id: string }>()
   const [ride, setRide] = useState<Ride | null>(null)
   const [origin, setOrigin] = useState<Location | null>(null)
-  const [destination, setDestination] = useState<Location | null>(null)
+  const [destinations, setDestinations] = useState<Location[]>([])
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [newPrice, setNewPrice] = useState<number | null>(null)
+  const [newDistKm, setNewDistKm] = useState<number | null>(null)
+  const [newDurMin, setNewDurMin] = useState<number | null>(null)
   const [recalculating, setRecalculating] = useState(false)
   const [locationsChanged, setLocationsChanged] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const d = new Date()
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const today = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
 
   useEffect(() => {
     fetch(`/api/rides/${id}`)
@@ -34,7 +38,10 @@ export default function EditarPedido() {
         }
         setRide(data)
         setOrigin({ address: data.origin, lat: data.origin_lat, lng: data.origin_lng })
-        setDestination({ address: data.destination, lat: data.destination_lat, lng: data.destination_lng })
+        const dests = data.destinations?.length
+          ? data.destinations
+          : [{ address: data.destination, lat: data.destination_lat, lng: data.destination_lng }]
+        setDestinations(dests)
         const d = new Date(data.scheduled_at)
         setDate(d.toISOString().split('T')[0])
         setTime(d.toTimeString().slice(0, 5))
@@ -49,28 +56,46 @@ export default function EditarPedido() {
     setNewPrice(null)
   }, [])
 
-  const handleDestinationChange = useCallback((loc: Location) => {
-    setDestination(loc)
+  function handleDestChange(i: number, loc: Location) {
+    setDestinations(prev => {
+      const next = [...prev]
+      next[i] = loc
+      return next
+    })
     setLocationsChanged(true)
     setNewPrice(null)
-  }, [])
+  }
+
+  function addDestination() {
+    setDestinations(prev => [...prev, { address: '', lat: 0, lng: 0 }])
+    setLocationsChanged(true)
+    setNewPrice(null)
+  }
+
+  function removeDestination(i: number) {
+    setDestinations(prev => prev.filter((_, j) => j !== i))
+    setLocationsChanged(true)
+    setNewPrice(null)
+  }
+
+  const allDestsValid = destinations.length > 0 && destinations.every(d => d.address && d.lat !== 0)
 
   async function recalculate() {
-    if (!origin || !destination) return
+    if (!origin || !allDestsValid) return
     setRecalculating(true)
+    setError('')
     try {
-      const params = new URLSearchParams({
-        originLat: String(origin.lat),
-        originLng: String(origin.lng),
-        destLat: String(destination.lat),
-        destLng: String(destination.lng),
-      })
+      const waypoints = [
+        { lat: origin.lat, lng: origin.lng },
+        ...destinations.map(d => ({ lat: d.lat, lng: d.lng })),
+      ]
+      const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
       const res = await fetch(`/api/price?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setNewPrice(data.price_ars)
-      // Guardamos distancia y duración para el save
-      setRide(prev => prev ? { ...prev, distance_km: data.distance_km, duration_min: data.duration_min } : prev)
+      setNewDistKm(data.distance_km)
+      setNewDurMin(data.duration_min)
     } catch {
       setError('No se pudo recalcular el precio.')
     } finally {
@@ -79,7 +104,7 @@ export default function EditarPedido() {
   }
 
   const canSave = (() => {
-    if (!date || !time) return false
+    if (!date || !time || !origin || !allDestsValid) return false
     if (locationsChanged && newPrice === null) return false
     const selected = new Date(`${date}T${time}`)
     const minTime = new Date()
@@ -98,30 +123,29 @@ export default function EditarPedido() {
   const canEdit = ride?.status === 'pending' || ride?.status === 'accepted'
 
   async function save() {
-    if (!origin || !destination) return
+    if (!origin || !allDestsValid) return
     setSaving(true)
     setError('')
     try {
       const isAccepted = ride?.status === 'accepted'
       const isInProgress = ride?.current_stop_index !== null && ride?.current_stop_index !== undefined
+      const lastDest = destinations[destinations.length - 1]
       const changes = {
         scheduled_at: new Date(`${date}T${time}`).toISOString(),
         origin: origin.address,
         origin_lat: origin.lat,
         origin_lng: origin.lng,
-        destination: destination.address,
-        destination_lat: destination.lat,
-        destination_lng: destination.lng,
+        destination: lastDest.address,
+        destination_lat: lastDest.lat,
+        destination_lng: lastDest.lng,
+        destinations,
         ...(newPrice !== null && {
           price_ars: newPrice,
-          distance_km: ride?.distance_km,
-          duration_min: ride?.duration_min,
+          distance_km: newDistKm ?? ride?.distance_km,
+          duration_min: newDurMin ?? ride?.duration_min,
         }),
       }
 
-      // En curso → aplicar directo sin aprobación
-      // Aceptado pero no iniciado → pending_changes para que el chofer apruebe
-      // Pendiente → actualizar y volver a pendiente
       const body = isAccepted && !isInProgress
         ? { pending_changes: changes }
         : { ...changes, ...(isAccepted ? {} : { status: 'pending' }) }
@@ -138,6 +162,12 @@ export default function EditarPedido() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function destLabel(i: number) {
+    if (destinations.length === 1) return 'Destino'
+    if (i === destinations.length - 1) return 'Destino final'
+    return `Parada ${i + 1}`
   }
 
   return (
@@ -157,7 +187,7 @@ export default function EditarPedido() {
             <>
               {error && <p className="text-sm text-amber-600 bg-amber-50 rounded-xl px-4 py-3">{error}</p>}
 
-              {/* Ubicaciones */}
+              {/* Origen */}
               {origin && (
                 <LocationInput
                   label="Punto de partida"
@@ -167,17 +197,44 @@ export default function EditarPedido() {
                   showCurrentLocation
                 />
               )}
-              {destination && (
-                <LocationInput
-                  label="Destino"
-                  placeholder="Ej: Shopping Los Gallegos"
-                  value={destination.address}
-                  onChange={handleDestinationChange}
-                />
-              )}
 
-              {/* Recalcular precio si cambiaron las ubicaciones */}
-              {locationsChanged && newPrice === null && (
+              {/* Destinos */}
+              {destinations.map((dest, i) => (
+                <div key={i} className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <LocationInput
+                      label={destLabel(i)}
+                      placeholder="Ej: Shopping Los Gallegos"
+                      value={dest.address}
+                      onChange={loc => handleDestChange(i, loc)}
+                    />
+                  </div>
+                  {destinations.length > 1 && (
+                    <button
+                      onClick={() => removeDestination(i)}
+                      className="mb-1 p-2 text-gray-400 hover:text-red-400 transition-colors rounded-lg border border-gray-200"
+                      aria-label="Eliminar destino"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                onClick={addDestination}
+                className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium self-start"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar parada
+              </button>
+
+              {/* Recalcular precio */}
+              {locationsChanged && newPrice === null && allDestsValid && (
                 <button
                   onClick={recalculate}
                   disabled={recalculating}
