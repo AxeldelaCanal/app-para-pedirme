@@ -20,7 +20,7 @@ Two separate surfaces sharing the same Next.js 15 App Router app:
 
 **Client surface** (`/`) — public, no auth
 - `/` → `BookingForm` (4-step wizard: locations → price auto-fetch → date/time → contact)
-- `/confirmation/[id]` → ride summary with cancel, edit, and add-stop flows
+- `/confirmation/[id]` → ride summary; actions: cancel, link to `/editar/[id]`
 - `/editar/[id]` → full ride editor: origin, multiple destinations (drag-to-reorder via `@dnd-kit`), date/time, price recalc
 
 **Driver dashboard** (`/dashboard`) — protected by `dashboard_auth` cookie via `src/middleware.ts`
