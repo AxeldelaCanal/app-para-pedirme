@@ -3,27 +3,15 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { use } from 'react'
-import dynamic from 'next/dynamic'
-import type { Location, Ride } from '@/types'
-
-const LocationInput = dynamic(() => import('@/components/LocationInput'), { ssr: false })
+import type { Ride } from '@/types'
 
 type CancelState = 'idle' | 'confirming' | 'loading' | 'done'
-type AddStopState = 'idle' | 'selecting' | 'positioning' | 'price_loading' | 'confirming' | 'saving' | 'sent'
 
 export default function Confirmation({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [ride, setRide] = useState<Ride | null>(null)
   const [cancelState, setCancelState] = useState<CancelState>('idle')
   const [driverPhone, setDriverPhone] = useState<string | null>(null)
-  const [addStopState, setAddStopState] = useState<AddStopState>('idle')
-  const [newStop, setNewStop] = useState<Location | null>(null)
-  const [newEstimate, setNewEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
-  const [stopKey, setStopKey] = useState(0)
-  const [insertPosition, setInsertPosition] = useState<number | null>(null)
-  const [removeIdx, setRemoveIdx] = useState<number | null>(null)
-  const [removeEstimate, setRemoveEstimate] = useState<{ distance_km: number; duration_min: number; price_ars: number } | null>(null)
-  const [removeSaving, setRemoveSaving] = useState(false)
 
   useEffect(() => {
     fetch(`/api/rides/${id}`)
@@ -53,140 +41,7 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
     }
   }
 
-  async function handleNewStopSelected(stop: Location) {
-    if (!ride) return
-    setNewStop(stop)
-    setInsertPosition(dests.length) // default: al final
-    setAddStopState('positioning')
-  }
-
-  async function confirmPosition(pos: number) {
-    if (!ride || !newStop) return
-    setInsertPosition(pos)
-    setAddStopState('price_loading')
-
-    const newDests = [...dests.slice(0, pos), newStop, ...dests.slice(pos)]
-    const waypoints = [
-      { lat: ride.origin_lat, lng: ride.origin_lng },
-      ...newDests.map(d => ({ lat: d.lat, lng: d.lng })),
-    ]
-
-    try {
-      const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
-      const res = await fetch(`/api/price?${params}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setNewEstimate(data)
-      setAddStopState('confirming')
-    } catch {
-      setAddStopState('positioning')
-    }
-  }
-
-  async function confirmAddStop() {
-    if (!ride || !newStop || !newEstimate) return
-    setAddStopState('saving')
-
-    const dests = ride.destinations?.length
-      ? ride.destinations
-      : [{ address: ride.destination, lat: ride.destination_lat, lng: ride.destination_lng }]
-    const pos = insertPosition ?? dests.length
-    const newDests = [...dests.slice(0, pos), newStop, ...dests.slice(pos)]
-    const lastDest = newDests[newDests.length - 1]
-    const changes = {
-      destinations: newDests,
-      destination: lastDest.address,
-      destination_lat: lastDest.lat,
-      destination_lng: lastDest.lng,
-      distance_km: newEstimate.distance_km,
-      duration_min: newEstimate.duration_min,
-      price_ars: newEstimate.price_ars,
-    }
-
-    const isInProgress = ride.current_stop_index !== null && ride.current_stop_index !== undefined
-    const body = isInProgress ? changes : { pending_changes: changes }
-
-    await fetch(`/api/rides/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    if (isInProgress) {
-      setRide(r => r ? { ...r, ...changes } : null)
-      setAddStopState('idle')
-    } else {
-      setRide(r => r ? { ...r, pending_changes: changes } : null)
-      setAddStopState('sent')
-    }
-    setNewStop(null)
-    setNewEstimate(null)
-    setStopKey(k => k + 1)
-  }
-
-  async function handleRemoveStop(idx: number) {
-    if (!ride) return
-    setRemoveIdx(idx)
-    const newDests = dests.filter((_, i) => i !== idx)
-    const waypoints = [
-      { lat: ride.origin_lat, lng: ride.origin_lng },
-      ...newDests.map(d => ({ lat: d.lat, lng: d.lng })),
-    ]
-    try {
-      const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
-      const res = await fetch(`/api/price?${params}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setRemoveEstimate(data)
-    } catch {
-      setRemoveIdx(null)
-    }
-  }
-
-  async function confirmRemoveStop() {
-    if (!ride || removeIdx === null || !removeEstimate) return
-    setRemoveSaving(true)
-    const newDests = dests.filter((_, i) => i !== removeIdx)
-    const lastDest = newDests[newDests.length - 1]
-    const changes = {
-      destinations: newDests,
-      destination: lastDest.address,
-      destination_lat: lastDest.lat,
-      destination_lng: lastDest.lng,
-      distance_km: removeEstimate.distance_km,
-      duration_min: removeEstimate.duration_min,
-      price_ars: removeEstimate.price_ars,
-    }
-
-    const isInProgress = ride.current_stop_index !== null && ride.current_stop_index !== undefined
-    const body = isInProgress ? changes : { pending_changes: changes }
-
-    await fetch(`/api/rides/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-
-    if (isInProgress) {
-      setRide(r => r ? { ...r, ...changes } : null)
-    } else {
-      setRide(r => r ? { ...r, pending_changes: changes } : null)
-    }
-    setRemoveIdx(null)
-    setRemoveEstimate(null)
-    setRemoveSaving(false)
-  }
-
-  function cancelAddStop() {
-    setAddStopState('idle')
-    setNewStop(null)
-    setNewEstimate(null)
-    setInsertPosition(null)
-    setStopKey(k => k + 1)
-  }
-
   const canCancel = ride && (ride.status === 'pending' || ride.status === 'accepted')
-  const canAddStop = ride?.status === 'accepted'
   const dests = ride?.destinations?.length
     ? ride.destinations
     : ride ? [{ address: ride.destination, lat: ride.destination_lat, lng: ride.destination_lng }] : []
@@ -247,24 +102,11 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
                 <span className="text-gray-700">{ride.origin.split(',')[0]}</span>
               </div>
               {dests.map((d, i) => (
-                <div key={i} className="flex gap-2 items-start justify-between">
-                  <div className="flex gap-2 items-start min-w-0">
-                    <span className={`shrink-0 mt-0.5 ${i === dests.length - 1 ? 'text-red-400' : 'text-blue-400'}`}>
-                      {i === dests.length - 1 ? '↓' : '◎'}
-                    </span>
-                    <span className="text-gray-700 truncate">{d.address.split(',')[0]}</span>
-                  </div>
-                  {canAddStop && dests.length > 1 && removeIdx === null && (
-                    <button
-                      onClick={() => handleRemoveStop(i)}
-                      className="shrink-0 text-gray-300 hover:text-red-400 transition-colors ml-2"
-                      aria-label="Eliminar parada"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
+                <div key={i} className="flex gap-2 items-start">
+                  <span className={`shrink-0 mt-0.5 ${i === dests.length - 1 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {i === dests.length - 1 ? '↓' : '◎'}
+                  </span>
+                  <span className="text-gray-700 truncate">{d.address.split(',')[0]}</span>
                 </div>
               ))}
               <div className="flex justify-between pt-1 border-t border-gray-200 text-xs text-gray-500">
@@ -275,152 +117,6 @@ export default function Confirmation({ params }: { params: Promise<{ id: string 
                 </span>
                 <span className="font-semibold text-gray-900">${ride.price_ars.toLocaleString('es-AR')}</span>
               </div>
-            </div>
-          )}
-
-          {/* Confirmar eliminación de parada */}
-          {removeIdx !== null && (
-            <div className="w-full rounded-2xl bg-red-50 border border-red-200 px-4 py-3 flex flex-col gap-3 text-sm text-left">
-              {!removeEstimate ? (
-                <p className="text-red-600 text-center">Recalculando precio...</p>
-              ) : (
-                <>
-                  <p className="text-red-800 font-semibold">¿Eliminar parada?</p>
-                  <div className="flex justify-between text-red-600">
-                    <span>Precio actual</span>
-                    <span className="line-through">${ride!.price_ars.toLocaleString('es-AR')}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-red-900">
-                    <span>Nuevo precio</span>
-                    <span>${removeEstimate.price_ars.toLocaleString('es-AR')}</span>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => { setRemoveIdx(null); setRemoveEstimate(null) }}
-                      disabled={removeSaving}
-                      className="flex-1 rounded-2xl border border-gray-200 py-3 font-semibold text-gray-600 disabled:opacity-40"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={confirmRemoveStop}
-                      disabled={removeSaving}
-                      className="flex-1 rounded-2xl bg-red-500 py-3 font-semibold text-white disabled:opacity-40"
-                    >
-                      {removeSaving ? 'Guardando...' : 'Confirmar'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Agregar parada — solo cuando el viaje está aceptado */}
-          {canAddStop && (
-            <div className="w-full">
-              {addStopState === 'idle' && (
-                <button
-                  onClick={() => setAddStopState('selecting')}
-                  className="w-full rounded-2xl border-2 border-blue-200 py-3 text-sm font-semibold text-blue-600 flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Agregar parada
-                </button>
-              )}
-
-              {addStopState === 'selecting' && (
-                <div className="flex flex-col gap-3 text-left">
-                  <p className="text-sm font-semibold text-gray-700">¿A dónde querés agregar una parada?</p>
-                  <LocationInput
-                    key={stopKey}
-                    label="Nueva parada"
-                    placeholder="Dirección de la parada"
-                    value=""
-                    onChange={handleNewStopSelected}
-                  />
-                  <button onClick={cancelAddStop} className="text-sm text-gray-400 underline self-start">
-                    Cancelar
-                  </button>
-                </div>
-              )}
-
-              {addStopState === 'positioning' && newStop && (
-                <div className="flex flex-col gap-3 text-left">
-                  <p className="text-sm font-semibold text-gray-700">¿Dónde insertás <span className="text-blue-600">{newStop.address.split(',')[0]}</span>?</p>
-                  <div className="flex flex-col gap-2">
-                    {[...Array(dests.length + 1)].map((_, pos) => {
-                      const label = pos === 0
-                        ? `Antes de: ${dests[0].address.split(',')[0]}`
-                        : pos === dests.length
-                          ? `Al final (después de: ${dests[dests.length - 1].address.split(',')[0]})`
-                          : `Entre: ${dests[pos - 1].address.split(',')[0]} y ${dests[pos].address.split(',')[0]}`
-                      return (
-                        <button
-                          key={pos}
-                          onClick={() => confirmPosition(pos)}
-                          className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 font-medium text-left"
-                        >
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button onClick={cancelAddStop} className="text-sm text-gray-400 underline self-start">
-                    Cancelar
-                  </button>
-                </div>
-              )}
-
-              {addStopState === 'price_loading' && (
-                <div className="w-full rounded-2xl bg-gray-50 border border-gray-200 py-4 text-sm text-gray-500 text-center">
-                  Calculando nuevo precio...
-                </div>
-              )}
-
-              {addStopState === 'confirming' && newEstimate && ride && (
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-2xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-left">
-                    <p className="text-blue-800 font-semibold mb-1">Parada: {newStop?.address.split(',')[0]}</p>
-                    <div className="flex justify-between text-blue-600">
-                      <span>Precio actual</span>
-                      <span className="line-through">${ride.price_ars.toLocaleString('es-AR')}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-blue-900">
-                      <span>Nuevo precio</span>
-                      <span>${newEstimate.price_ars.toLocaleString('es-AR')}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={cancelAddStop}
-                      className="flex-1 rounded-2xl border border-gray-200 py-3 text-sm font-semibold text-gray-600"
-                    >
-                      No, mantener
-                    </button>
-                    <button
-                      onClick={confirmAddStop}
-                      className="flex-1 rounded-2xl bg-blue-500 py-3 text-sm font-semibold text-white"
-                    >
-                      Confirmar parada
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {addStopState === 'saving' && (
-                <div className="w-full rounded-2xl bg-gray-50 border border-gray-200 py-4 text-sm text-gray-500 text-center">
-                  Guardando parada...
-                </div>
-              )}
-
-              {addStopState === 'sent' && (
-                <div className="w-full rounded-2xl bg-amber-50 border border-amber-200 px-4 py-4 flex flex-col gap-1 text-center">
-                  <p className="text-sm font-semibold text-amber-800">Solicitud enviada ✏️</p>
-                  <p className="text-xs text-amber-600">El conductor revisará el cambio y te confirmará.</p>
-                </div>
-              )}
             </div>
           )}
 
