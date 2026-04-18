@@ -102,6 +102,7 @@ export default function EditarPedido() {
     setError('')
     try {
       const isAccepted = ride?.status === 'accepted'
+      const isInProgress = ride?.current_stop_index !== null && ride?.current_stop_index !== undefined
       const changes = {
         scheduled_at: new Date(`${date}T${time}`).toISOString(),
         origin: origin.address,
@@ -117,9 +118,12 @@ export default function EditarPedido() {
         }),
       }
 
-      const body = isAccepted
+      // En curso → aplicar directo sin aprobación
+      // Aceptado pero no iniciado → pending_changes para que el chofer apruebe
+      // Pendiente → actualizar y volver a pendiente
+      const body = isAccepted && !isInProgress
         ? { pending_changes: changes }
-        : { ...changes, status: 'pending' }
+        : { ...changes, ...(isAccepted ? {} : { status: 'pending' }) }
 
       const res = await fetch(`/api/rides/${id}`, {
         method: 'PATCH',
