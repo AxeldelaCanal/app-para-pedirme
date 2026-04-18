@@ -1,4 +1,5 @@
 import BookingForm from '@/components/BookingForm'
+import InstallButton from '@/components/InstallButton'
 
 export default function Home() {
   return (
@@ -7,9 +8,12 @@ export default function Home() {
       <div className="relative overflow-hidden px-6 pt-14 pb-20">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/20 via-transparent to-transparent" />
         <div className="relative max-w-md mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-6">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-emerald-400 text-xs font-medium">Servicio activo</span>
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-emerald-400 text-xs font-medium">Servicio activo</span>
+            </div>
+            <InstallButton />
           </div>
           <h1 className="text-4xl font-bold text-white leading-tight">
             Tu viaje,<br />
