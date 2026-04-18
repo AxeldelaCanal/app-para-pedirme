@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import type { Location, PriceEstimate } from '@/types'
@@ -19,12 +19,15 @@ interface FormState {
   notes: string
 }
 
-const today = new Date().toISOString().split('T')[0]
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const EMPTY: FormState = {
   origin: null,
   destinations: [null],
-  date: today,
+  date: localToday(),
   time: '',
   name: '',
   phone: '',
@@ -57,28 +60,27 @@ export default function BookingForm() {
     setForm(f => ({ ...f, destinations: f.destinations.filter((_, j) => j !== i) }))
   }
 
-  async function fetchPrice() {
+  // Step 3: auto-fetch price when arriving
+  useEffect(() => {
+    if (step !== 3) return
     if (!form.origin || form.destinations.some(d => !d)) return
     const validDests = form.destinations as Location[]
     setLoading(true)
     setError('')
-    try {
-      const waypoints = [
-        { lat: form.origin.lat, lng: form.origin.lng },
-        ...validDests.map(d => ({ lat: d.lat, lng: d.lng })),
-      ]
-      const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
-      const res = await fetch(`/api/price?${params}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setEstimate(data)
-      setStep(4)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al calcular el precio')
-    } finally {
-      setLoading(false)
-    }
-  }
+    const waypoints = [
+      { lat: form.origin.lat, lng: form.origin.lng },
+      ...validDests.map(d => ({ lat: d.lat, lng: d.lng })),
+    ]
+    const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
+    fetch(`/api/price?${params}`)
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error)
+        setEstimate(data)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error al calcular el precio'))
+      .finally(() => setLoading(false))
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function confirm() {
     if (!form.origin || form.destinations.some(d => !d) || !estimate) return
@@ -130,7 +132,7 @@ export default function BookingForm() {
     ? 'El viaje debe ser con al menos 30 minutos de anticipación' : ''
 
   const isValidArgPhone = (p: string) => /^(11|15|2\d{2,3}|3\d{2,3})\d{6,8}$/.test(p.replace(/\D/g, ''))
-  const canStep3 = form.name.trim().length > 1 && isValidArgPhone(form.phone)
+  const canStep4 = form.name.trim().length > 1 && isValidArgPhone(form.phone)
 
   function destLabel(i: number, total: number) {
     if (total === 1) return 'Destino'
@@ -143,7 +145,7 @@ export default function BookingForm() {
       {/* Progreso */}
       <div className="flex gap-1.5 mb-7">
         {([1, 2, 3, 4] as Step[]).map(s => (
-          <div key={s} className="flex-1 flex flex-col gap-1">
+          <div key={s} className="flex-1">
             <div className={`h-1 rounded-full transition-all duration-300 ${s <= step ? 'bg-emerald-500' : 'bg-gray-100'}`} />
           </div>
         ))}
@@ -224,7 +226,7 @@ export default function BookingForm() {
             <label className="text-sm font-medium text-gray-700">Fecha</label>
             <input
               type="date"
-              min={new Date().toISOString().split('T')[0]}
+              min={localToday()}
               max={`${new Date().getFullYear() + 1}-12-31`}
               value={form.date}
               onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
@@ -246,8 +248,55 @@ export default function BookingForm() {
               ← Atrás
             </button>
             <button
-              onClick={() => setStep(3)}
+              onClick={() => { setEstimate(null); setStep(3) }}
               disabled={!canStep2}
+              className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
+            >
+              Ver precio →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Paso 3 — Precio */}
+      {step === 3 && (
+        <div className="flex flex-col gap-5">
+          <div>
+            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 3 de 4</p>
+            <h2 className="text-2xl font-bold text-gray-900">Tu precio</h2>
+          </div>
+
+          {loading && (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6 text-center text-sm text-gray-400">
+              Calculando precio...
+            </div>
+          )}
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {estimate && !loading && (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 flex flex-col gap-3 text-sm">
+              <Row label="Origen" value={form.origin?.address ?? ''} />
+              {form.destinations.map((d, i) => (
+                <Row key={i} label={destLabel(i, form.destinations.length)} value={d?.address ?? ''} />
+              ))}
+              <Row label="Fecha" value={`${form.date} ${form.time}`} />
+              <Row label="Distancia" value={`${estimate.distance_km.toFixed(1)} km`} />
+              <Row label="Duración estimada" value={`${Math.round(estimate.duration_min)} min`} />
+              <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
+                <span className="font-semibold text-gray-700">Total estimado</span>
+                <span className="text-2xl font-bold text-slate-900">${estimate.price_ars.toLocaleString('es-AR')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => setStep(2)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
+              ← Atrás
+            </button>
+            <button
+              onClick={() => setStep(4)}
+              disabled={!estimate || loading}
               className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
             >
               Continuar →
@@ -256,13 +305,19 @@ export default function BookingForm() {
         </div>
       )}
 
-      {/* Paso 3 — Contacto */}
-      {step === 3 && (
+      {/* Paso 4 — Datos de contacto + confirmar */}
+      {step === 4 && estimate && (
         <div className="flex flex-col gap-5">
           <div>
-            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 3 de 4</p>
+            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 4 de 4</p>
             <h2 className="text-2xl font-bold text-gray-900">Tus datos</h2>
           </div>
+
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 flex justify-between items-center">
+            <span className="text-sm text-emerald-700">Total estimado</span>
+            <span className="text-xl font-bold text-emerald-700">${estimate.price_ars.toLocaleString('es-AR')}</span>
+          </div>
+
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">Nombre completo</label>
             <input
@@ -298,56 +353,12 @@ export default function BookingForm() {
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <div className="flex gap-3">
-            <button onClick={() => setStep(2)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
-              ← Atrás
-            </button>
-            <button
-              onClick={fetchPrice}
-              disabled={!canStep3 || loading}
-              className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
-            >
-              {loading ? 'Calculando...' : 'Ver precio →'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Paso 4 — Confirmar */}
-      {step === 4 && estimate && (
-        <div className="flex flex-col gap-5">
-          <div>
-            <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-1">Paso 4 de 4</p>
-            <h2 className="text-2xl font-bold text-gray-900">Resumen</h2>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 flex flex-col gap-3 text-sm">
-            <Row label="Origen" value={form.origin?.address ?? ''} />
-            {form.destinations.map((d, i) => (
-              <Row
-                key={i}
-                label={destLabel(i, form.destinations.length)}
-                value={d?.address ?? ''}
-              />
-            ))}
-            <Row label="Fecha" value={`${form.date} ${form.time}`} />
-            <Row label="Distancia" value={`${estimate.distance_km.toFixed(1)} km`} />
-            <Row label="Duración estimada" value={`${Math.round(estimate.duration_min)} min`} />
-            {form.notes && <Row label="Aclaraciones" value={form.notes} />}
-            <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
-              <span className="font-semibold text-gray-700">Total estimado</span>
-              <span className="text-2xl font-bold text-slate-900">${estimate.price_ars.toLocaleString('es-AR')}</span>
-            </div>
-          </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          <div className="flex gap-3">
             <button onClick={() => setStep(3)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
               ← Atrás
             </button>
             <button
               onClick={confirm}
-              disabled={loading}
+              disabled={!canStep4 || loading}
               className="flex-1 rounded-2xl bg-slate-900 py-4 font-semibold text-white disabled:opacity-30"
             >
               {loading ? 'Enviando...' : 'Confirmar pedido'}

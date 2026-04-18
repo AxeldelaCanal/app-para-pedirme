@@ -385,6 +385,7 @@ export default function Dashboard() {
             : f === 'cancelled' ? 'Cancelados'
             : f === 'rejected' ? 'Rechazados'
             : 'Todos'
+          const pendingChangesCount = acceptedRides.filter(r => r.pending_changes).length
           const activeCount = f === 'accepted' ? acceptedRides.length : 0
           return (
             <button
@@ -402,6 +403,11 @@ export default function Dashboard() {
                   filter === f ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'
                 }`}>
                   {activeCount}
+                </span>
+              )}
+              {f === 'accepted' && pendingChangesCount > 0 && (
+                <span className="rounded-full px-1.5 py-0.5 text-xs font-bold bg-amber-400 text-white">
+                  {pendingChangesCount} ✏️
                 </span>
               )}
             </button>
