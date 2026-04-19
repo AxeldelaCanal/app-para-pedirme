@@ -20,7 +20,6 @@ function rideStops(ride: Ride) {
 }
 
 export async function emailNuevoPedido(ride: Ride) {
-  console.log('[email] API key present:', !!process.env.RESEND_API_KEY, '| TO:', TO)
   await resend.emails.send({
     from: FROM,
     to: TO,
@@ -36,7 +35,7 @@ export async function emailNuevoPedido(ride: Ride) {
       <br>
       <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Ver en el panel</a>
     `,
-  }).then(() => console.log('[email] emailNuevoPedido: enviado OK')).catch(err => console.error('[email] emailNuevoPedido ERROR:', err))
+  }).catch(err => console.error('[email] emailNuevoPedido:', err))
 }
 
 export async function emailCancelacion(ride: Ride) {
