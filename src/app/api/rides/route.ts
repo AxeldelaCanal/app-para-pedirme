@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { sendPush } from '@/lib/push'
+import { emailNuevoPedido } from '@/lib/email'
 import type { Ride } from '@/types'
 
 export async function GET() {
@@ -44,6 +45,8 @@ export async function POST(req: Request) {
         tag: 'new-ride',
       })
     }
+
+    await emailNuevoPedido(data)
 
     return NextResponse.json(data, { status: 201 })
   } catch (e) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { sendPush } from '@/lib/push'
+import { emailCancelacion, emailCambiosPropuestos, emailPedidoModificado } from '@/lib/email'
 import type { RideStatus, PendingChanges } from '@/types'
 
 export async function GET(
@@ -94,18 +95,21 @@ export async function PATCH(
           body: `${data.client_name} canceló su viaje`,
           tag: 'cancelled',
         })
+        await emailCancelacion(data)
       } else if (body.pending_changes != null) {
         await sendPush(sub, {
           title: 'Cliente propuso cambios ✏️',
           body: `${data.client_name} modificó un viaje aceptado`,
           tag: 'pending-changes',
         })
+        await emailCambiosPropuestos(data)
       } else if (body.status === 'pending') {
         await sendPush(sub, {
           title: 'Pedido modificado 🕐',
           body: `${data.client_name} cambió su viaje`,
           tag: 'modified',
         })
+        await emailPedidoModificado(data)
       }
     }
   }
