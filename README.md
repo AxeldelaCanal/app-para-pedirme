@@ -27,7 +27,7 @@ Al confirmar, reciben una página de resumen con opción de cancelar o editar el
 - **Mapas y distancias**: Google Maps API (Places Autocomplete + Distance Matrix)
 - **Estilos**: Tailwind CSS v4
 - **Drag & drop**: @dnd-kit
-- **Push notifications**: Web Push API + web-push (VAPID)
+- **Notificaciones**: Web Push API + web-push (VAPID) + Resend (email)
 - **Deploy**: Vercel
 
 ## Arquitectura
@@ -49,12 +49,15 @@ Dos manifests PWA separados:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-NEXT_PUBLIC_GOOGLE_MAPS_KEY=       # Places Autocomplete (client-side)
-GOOGLE_MAPS_API_KEY=               # Distance Matrix (server-side)
+NEXT_PUBLIC_GOOGLE_MAPS_KEY=        # Places Autocomplete (client-side)
+GOOGLE_MAPS_API_KEY=                # Distance Matrix (server-side)
 DASHBOARD_PASSWORD=
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=      # Push notifications
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=       # Web Push notifications
 VAPID_PRIVATE_KEY=
-VAPID_EMAIL=                       # mailto:tu@email.com
+VAPID_EMAIL=                        # mailto:tu@email.com
+RESEND_API_KEY=                     # Email notifications (resend.com)
+NOTIFICATION_EMAIL=                 # Email donde llegan los avisos
+NEXT_PUBLIC_APP_URL=                # URL de producción (ej: https://app-para-pedirme.vercel.app)
 ```
 
 ## Base de datos (Supabase)
@@ -124,9 +127,12 @@ npm run lint     # ESLint
 
 Si el cliente edita un viaje ya aceptado que no ha comenzado (`current_stop_index === null`), los cambios quedan en `pending_changes` y el conductor debe aprobarlos o rechazarlos desde el panel. Si el viaje ya comenzó, los cambios se aplican directamente.
 
-### Notificaciones push
+### Notificaciones al conductor
 
-El conductor activa las alertas desde el panel. Esto registra un Service Worker y crea una suscripción push guardada en la tabla `settings`. Cuando un cliente crea o modifica un viaje, el servidor envía un push que el SW muestra incluso con la app cerrada.
+Cuando un cliente crea o modifica un viaje, el servidor dispara dos canales en paralelo:
+
+- **Email** (Resend): llega instantáneo con los datos del cliente y un botón al panel. Funciona en cualquier dispositivo sin configuración extra.
+- **Web Push**: requiere que el conductor active las alertas desde el panel. Registra un Service Worker (`public/sw.js`) y guarda la suscripción en `settings.push_subscription`. El SW muestra la notificación aunque la app esté cerrada. En iOS solo funciona si el dashboard está instalado como PWA en la pantalla de inicio.
 
 ### Detección de conflictos de horario
 
