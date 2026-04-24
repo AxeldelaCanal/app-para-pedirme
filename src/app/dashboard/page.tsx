@@ -11,6 +11,28 @@ import { haversineKm } from '@/lib/scheduling'
 
 const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 
+async function svgElementToPngBlob(svgEl: SVGSVGElement): Promise<Blob> {
+  const serialized = new XMLSerializer().serializeToString(svgEl)
+  const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' })
+  const url = URL.createObjectURL(svgBlob)
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/png')
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
 type Filter = 'all' | RideStatus
 type Period = 'today' | 'week' | 'month' | 'all'
 
@@ -75,6 +97,22 @@ export default function Dashboard() {
   }
 
   const prevRidesRef = useRef<Ride[]>([])
+  const qrWrapperRef = useRef<HTMLDivElement>(null)
+
+  async function shareQR(url: string) {
+    const svgEl = qrWrapperRef.current?.querySelector('svg')
+    if (svgEl && navigator.canShare) {
+      try {
+        const blob = await svgElementToPngBlob(svgEl as SVGSVGElement)
+        const file = new File([blob], 'qr-reservas.png', { type: 'image/png' })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: `Reservá tu viaje: ${url}` })
+          return
+        }
+      } catch { /* fallback */ }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`Reservá tu viaje: ${url}`)}`, '_blank')
+  }
 
   function urlBase64ToUint8Array(base64: string): Uint8Array {
     const padding = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -674,12 +712,14 @@ export default function Dashboard() {
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 pb-6" onClick={() => setShowQR(false)}>
               <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full max-w-sm flex flex-col items-center gap-4 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">Tu link de reservas</p>
-                <QRCodeSVG
-                  value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
-                  size={200}
-                  bgColor={darkMode ? '#111827' : '#ffffff'}
-                  fgColor={darkMode ? '#ffffff' : '#0f172a'}
-                />
+                <div ref={qrWrapperRef}>
+                  <QRCodeSVG
+                    value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
+                    size={200}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 text-center break-all">
                   {typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/{driver.slug}
                 </p>
@@ -690,14 +730,12 @@ export default function Dashboard() {
                   >
                     Copiar link
                   </button>
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`Reservá tu viaje: ${window.location.origin}/${driver.slug}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 rounded-2xl bg-[#25D366] py-3 text-sm font-semibold text-white text-center"
+                  <button
+                    onClick={() => shareQR(`${window.location.origin}/${driver.slug}`)}
+                    className="flex-1 rounded-2xl bg-[#25D366] py-3 text-sm font-semibold text-white"
                   >
-                    WhatsApp
-                  </a>
+                    Compartir
+                  </button>
                 </div>
               </div>
             </div>
