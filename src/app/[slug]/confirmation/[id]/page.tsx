@@ -109,13 +109,36 @@ export default function Confirmation({ params }: { params: Promise<{ slug: strin
                   <span className="text-gray-700 truncate">{d.address.split(',')[0]}</span>
                 </div>
               ))}
-              <div className="flex justify-between pt-1 border-t border-gray-200 text-xs text-gray-500">
-                <span>
-                  {new Date(ride.scheduled_at).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  {' · '}
-                  {new Date(ride.scheduled_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-                <span className="font-semibold text-gray-900">${ride.price_ars.toLocaleString('es-AR')}</span>
+              <div className="flex flex-col gap-1 pt-1 border-t border-gray-200">
+                {ride.pending_changes?.scheduled_at && ride.pending_changes.scheduled_at !== ride.scheduled_at ? (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400 line-through">
+                        {new Date(ride.scheduled_at).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {' · '}
+                        {new Date(ride.scheduled_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-amber-700 font-medium">
+                        {new Date(ride.pending_changes.scheduled_at).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {' · '}
+                        {new Date(ride.pending_changes.scheduled_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        <span className="ml-1.5 bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">pendiente</span>
+                      </span>
+                      <span className="font-semibold text-gray-900">${ride.price_ars.toLocaleString('es-AR')}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>
+                      {new Date(ride.scheduled_at).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      {' · '}
+                      {new Date(ride.scheduled_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span className="font-semibold text-gray-900">${ride.price_ars.toLocaleString('es-AR')}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
