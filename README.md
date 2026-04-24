@@ -1,139 +1,186 @@
-# Pedí tu viaje
+# App para Pedirme
 
-App PWA para reservar viajes con precio fijo y confirmación directa por WhatsApp. Incluye panel de control privado para el conductor con notificaciones push en tiempo real.
+A multi-driver ride booking platform built for independent drivers who want their own direct booking system — no Uber, no middleman. Clients book via a personal link, the driver manages everything from a mobile-first PWA dashboard.
 
-## Qué hace
+**Live:** [app-para-pedirme.vercel.app](https://app-para-pedirme.vercel.app)
 
-**Clientes** acceden a `/` y completan un formulario de 4 pasos:
-1. Origen y destinos (soporte multi-parada, drag & drop para reordenar)
-2. Precio calculado automáticamente según distancia y duración real (Google Maps)
-3. Fecha y hora del viaje
-4. Nombre y teléfono de contacto
+---
 
-Al confirmar, reciben una página de resumen con opción de cancelar o editar el viaje.
+## How it works
 
-**Conductor** accede a `/dashboard` con contraseña y desde ahí:
-- Ve todos los pedidos en tiempo real (polling cada 10s + Supabase Realtime)
-- Acepta, rechaza o completa viajes (abre WhatsApp con mensaje pre-cargado)
-- Recibe notificaciones push aunque la app esté cerrada o en segundo plano
-- Ve estadísticas de ganancias por período (hoy, semana, mes, total)
-- Ordena pedidos pendientes por proximidad al último destino aceptado
-- Configura tarifas y teléfono de contacto desde el mismo panel
+Each driver gets a unique booking URL (`/{slug}`). Clients open the link, fill a 4-step form, and the driver receives an instant push notification + email. The driver accepts or rejects from the dashboard, and WhatsApp messages are auto-generated for client communication.
+
+```
+Client opens /{slug}
+  → 4-step booking form (locations → price → date → contact)
+  → POST /api/rides
+  → Push notification + email to driver
+  → Driver accepts/rejects from dashboard
+  → WhatsApp deep link opens with pre-filled message
+```
+
+---
 
 ## Stack
 
-- **Framework**: Next.js 15 (App Router)
-- **Base de datos**: Supabase (PostgreSQL + Realtime)
-- **Mapas y distancias**: Google Maps API (Places Autocomplete + Distance Matrix)
-- **Estilos**: Tailwind CSS v4
-- **Drag & drop**: @dnd-kit
-- **Notificaciones**: Web Push API + web-push (VAPID) + Resend (email)
-- **Deploy**: Vercel
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS v4 |
+| Database | Supabase (PostgreSQL + RLS) |
+| Maps | Google Maps JS API v2 + Distance Matrix API |
+| Drag & drop | @dnd-kit |
+| Email | Resend |
+| Push | Web Push (VAPID) |
+| Hosting | Vercel |
 
-## Arquitectura
+---
+
+## Project structure
 
 ```
-/                     → BookingForm (wizard 4 pasos, público)
-/confirmation/[id]    → Resumen del viaje, cancelar o editar
-/editar/[id]          → Editor completo: origen, destinos múltiples, fecha/hora, precio
-/dashboard            → Panel del conductor (protegido por cookie)
-/dashboard/login      → Login del conductor
+src/
+├── app/
+│   ├── [slug]/                  # Client-facing booking surface
+│   │   ├── page.tsx             # Booking form
+│   │   ├── confirmation/[id]/   # Ride summary + cancel/edit
+│   │   └── editar/[id]/         # Edit ride (drag-to-reorder stops)
+│   ├── dashboard/               # Driver dashboard (auth-protected)
+│   ├── registro/                # Driver sign-up
+│   └── api/
+│       ├── auth/                # Login, register, me, reset
+│       ├── rides/               # CRUD + status transitions
+│       ├── price/               # Distance Matrix → price estimate
+│       ├── push/                # Push subscription management
+│       └── settings/            # Per-driver pricing config
+├── components/
+│   ├── BookingForm.tsx          # 4-step booking wizard
+│   ├── RideCard.tsx             # Dashboard ride card + navigation
+│   ├── LocationInput.tsx        # Google Places Autocomplete
+│   └── SlideButton.tsx          # Swipe-to-confirm button
+└── lib/
+    ├── auth.ts                  # getDriverId() — reads driver_id cookie
+    ├── pricing.ts               # calculatePrice() — rounds to nearest $10
+    ├── scheduling.ts            # detectConflict() — Haversine gap check
+    ├── email.ts                 # Resend templates
+    └── push.ts                  # Web Push sender
 ```
 
-Dos manifests PWA separados:
-- `/manifest.json` → `start_url: "/"` para clientes
-- `/manifest-dashboard.json` → `start_url: "/dashboard"` para el conductor
+---
 
-## Variables de entorno
+## Database schema
+
+```sql
+drivers     id uuid PK, name, slug UNIQUE, email UNIQUE,
+            password_hash, phone, created_at
+
+rides       id uuid PK, driver_id → drivers,
+            client_name, client_phone,
+            origin, origin_lat, origin_lng,
+            destination, destination_lat, destination_lng,  -- mirrors last stop (backwards compat)
+            destinations jsonb,                              -- canonical: [{address, lat, lng}]
+            current_stop_index int,                         -- null = not started
+            scheduled_at, distance_km, duration_min,
+            price_ars, status, notes,
+            pending_changes jsonb,                           -- client-proposed edits on accepted rides
+            created_at
+
+settings    driver_id → drivers,
+            base_fare, price_per_km, price_per_min, booking_fee,
+            driver_phone, push_subscription jsonb,
+            updated_at
+```
+
+RLS is enabled on all tables. `anon` role can INSERT rides. All other mutations go through the service role via server-side API routes.
+
+---
+
+## Key flows
+
+### Booking
+
+The 4-step form fetches a price estimate on step 2 via `/api/price`, which calls Google's Distance Matrix API server-side using the driver's fare settings. Supports multi-stop rides with drag-to-reorder. The "Lo antes posible" toggle skips date/time input and books for the current moment.
+
+### Pending changes
+
+When a client edits an **accepted** ride that hasn't started yet (`current_stop_index === null`), the payload is stored in `rides.pending_changes` instead of applied directly. The driver sees a diff banner in the dashboard showing only the fields that actually changed — date, origin, stops, or price. On accept, fields are merged and `pending_changes` is nullified. On reject, only `pending_changes` is cleared.
+
+If the ride is already in progress (`current_stop_index !== null`), changes are applied immediately — no approval needed.
+
+### Driver navigation
+
+Multi-stop rides are navigated step by step using Waze deep links. `current_stop_index` tracks the driver's progress: `null` = heading to pick up client, `0` = first stop, etc. The `SlideButton` component prevents accidental taps with a swipe-to-confirm gesture.
+
+### Conflict detection
+
+On ride accept, `detectConflict()` estimates travel time from the last destination of any accepted ride to the origin of the new one (Haversine distance ÷ 40 km/h + 10-minute buffer). On conflict, the driver can send a WhatsApp message suggesting an alternative time.
+
+### Notifications
+
+Two parallel channels triggered server-side on every ride event:
+
+- **Email** (Resend) — instant delivery, no device setup required
+- **Web Push** (VAPID) — requires driver to grant permission from the dashboard. Service Worker at `public/sw.js` suppresses the notification if the app window is focused, to avoid duplicates with the foreground polling loop
+
+The dashboard uses both 10-second polling **and** Supabase Realtime. Realtime handles instant delivery; polling is the fallback. JSONB columns (`pending_changes`, `destinations`) are re-fetched via `GET /api/rides/[id]` after a Realtime event because the payload doesn't reliably include full JSONB diffs in production.
+
+---
+
+## Local development
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm run lint
+```
+
+Required environment variables:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-NEXT_PUBLIC_GOOGLE_MAPS_KEY=        # Places Autocomplete (client-side)
-GOOGLE_MAPS_API_KEY=                # Distance Matrix (server-side)
-DASHBOARD_PASSWORD=
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=       # Web Push notifications
+NEXT_PUBLIC_GOOGLE_MAPS_KEY=         # Places Autocomplete (client-side)
+GOOGLE_MAPS_API_KEY=                 # Distance Matrix (server-side)
+RESEND_API_KEY=
+NOTIFICATION_EMAIL=
+NEXT_PUBLIC_APP_URL=                 # e.g. https://app-para-pedirme.vercel.app
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
-VAPID_EMAIL=                        # mailto:tu@email.com
-RESEND_API_KEY=                     # Email notifications (resend.com)
-NOTIFICATION_EMAIL=                 # Email donde llegan los avisos
-NEXT_PUBLIC_APP_URL=                # URL de producción (ej: https://app-para-pedirme.vercel.app)
+VAPID_EMAIL=                         # mailto:you@example.com
 ```
 
-## Base de datos (Supabase)
+---
 
-### Tabla `rides`
+## Deployment
 
-| Columna | Tipo | Descripción |
-|---|---|---|
-| id | uuid | PK generado automáticamente |
-| client_name | text | Nombre del cliente |
-| client_phone | text | Teléfono del cliente |
-| origin | text | Dirección de origen |
-| origin_lat / origin_lng | float8 | Coordenadas de origen |
-| destination | text | Última parada (compatibilidad) |
-| destination_lat / destination_lng | float8 | Coordenadas última parada |
-| destinations | jsonb | Array de paradas `[{address, lat, lng}]` |
-| current_stop_index | int4 | null = no iniciado; número = parada actual |
-| scheduled_at | timestamptz | Fecha y hora del viaje |
-| distance_km | float8 | Distancia calculada |
-| duration_min | float8 | Duración estimada |
-| price_ars | int4 | Precio en pesos argentinos |
-| status | text | pending / accepted / rejected / completed / cancelled |
-| notes | text | Notas del cliente (opcional) |
-| pending_changes | jsonb | Cambios propuestos por el cliente en viajes aceptados |
-| created_at | timestamptz | Timestamp de creación |
+Vercel deploys automatically on push to `main`. Set all environment variables in the Vercel dashboard before the first deploy.
 
-### Tabla `settings`
+**First-time database setup:**
 
-| Columna | Tipo | Descripción |
-|---|---|---|
-| id | int4 | Siempre 1 (fila única) |
-| base_fare | float8 | Tarifa base en ARS |
-| price_per_km | float8 | Precio por km |
-| price_per_min | float8 | Precio por minuto |
-| booking_fee | float8 | Cargo de reserva |
-| driver_phone | text | Teléfono del conductor para WhatsApp |
-| push_subscription | jsonb | Suscripción push activa del conductor |
-| updated_at | timestamptz | Última actualización |
-
-### Migración requerida
+1. Run migrations in order in the Supabase SQL editor:
+   - `supabase/migrations/001_multi_stop.sql`
+   - `supabase/migrations/002_multi_driver.sql`
+2. Register your driver account at `/registro`
+3. If you have existing rides from a pre-multi-driver setup, backfill them:
 
 ```sql
-ALTER TABLE settings ADD COLUMN push_subscription jsonb;
+UPDATE rides
+SET driver_id = (SELECT id FROM drivers WHERE slug = 'your-slug')
+WHERE driver_id IS NULL;
+
+UPDATE settings
+SET driver_id = (SELECT id FROM drivers WHERE slug = 'your-slug')
+WHERE driver_id IS NULL;
 ```
 
-## Correr localmente
+---
 
-```bash
-npm install
-npm run dev
-```
+## PWA
 
-Abrir [http://localhost:3000](http://localhost:3000).
+Two separate manifests handle the correct "Add to Home Screen" `start_url` on Android:
 
-Las push notifications requieren HTTPS. En localhost funcionan en Chrome/Edge. En producción funcionan en cualquier browser que soporte Web Push.
+- `public/manifest.json` → `start_url: "/"` — client booking page
+- `public/manifest-dashboard.json` → `start_url: "/dashboard"` — driver dashboard
 
-## Comandos
-
-```bash
-npm run dev      # Servidor de desarrollo (localhost:3000)
-npm run lint     # ESLint
-```
-
-## Flujos clave
-
-### Pedido de cambios en viaje aceptado
-
-Si el cliente edita un viaje ya aceptado que no ha comenzado (`current_stop_index === null`), los cambios quedan en `pending_changes` y el conductor debe aprobarlos o rechazarlos desde el panel. Si el viaje ya comenzó, los cambios se aplican directamente.
-
-### Notificaciones al conductor
-
-Cuando un cliente crea o modifica un viaje, el servidor dispara dos canales en paralelo:
-
-- **Email** (Resend): llega instantáneo con los datos del cliente y un botón al panel. Funciona en cualquier dispositivo sin configuración extra.
-- **Web Push**: requiere que el conductor active las alertas desde el panel. Registra un Service Worker (`public/sw.js`) y guarda la suscripción en `settings.push_subscription`. El SW muestra la notificación aunque la app esté cerrada. En iOS solo funciona si el dashboard está instalado como PWA en la pantalla de inicio.
-
-### Detección de conflictos de horario
-
-Al aceptar un viaje, el panel calcula si hay conflicto con viajes ya aceptados usando distancia Haversine entre el último destino del viaje anterior y el origen del nuevo, asumiendo 40 km/h de velocidad promedio con 10 minutos de buffer.
+> **iOS Web Push:** only works when the PWA is installed to the home screen, with notification permission granted from within the installed app — not from Safari.
