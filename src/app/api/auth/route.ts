@@ -1,24 +1,32 @@
 import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import bcrypt from 'bcryptjs'
 
 export async function POST(req: Request) {
-  const { password } = await req.json()
+  const { email, password } = await req.json()
 
-  if (password !== process.env.DASHBOARD_PASSWORD) {
-    return NextResponse.json({ error: 'Contraseña incorrecta' }, { status: 401 })
+  const { data: driver } = await supabase
+    .from('drivers')
+    .select('id, password_hash')
+    .eq('email', email.toLowerCase())
+    .single()
+
+  if (!driver || !(await bcrypt.compare(password, driver.password_hash))) {
+    return NextResponse.json({ error: 'Email o contraseña incorrectos' }, { status: 401 })
   }
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set('dashboard_auth', 'ok', {
+  res.cookies.set('driver_id', driver.id, {
     httpOnly: true,
     sameSite: 'strict',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 días
+    maxAge: 60 * 60 * 24 * 30,
   })
   return res
 }
 
 export async function DELETE() {
   const res = NextResponse.json({ ok: true })
-  res.cookies.delete('dashboard_auth')
+  res.cookies.delete('driver_id')
   return res
 }

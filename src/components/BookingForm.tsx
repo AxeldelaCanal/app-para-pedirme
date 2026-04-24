@@ -34,7 +34,7 @@ const EMPTY: FormState = {
   notes: '',
 }
 
-export default function BookingForm() {
+export default function BookingForm({ driverSlug }: { driverSlug: string }) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
   const [form, setForm] = useState<FormState>(EMPTY)
@@ -71,7 +71,7 @@ export default function BookingForm() {
       { lat: form.origin.lat, lng: form.origin.lng },
       ...validDests.map(d => ({ lat: d.lat, lng: d.lng })),
     ]
-    const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints) })
+    const params = new URLSearchParams({ waypoints: JSON.stringify(waypoints), slug: driverSlug })
     fetch(`/api/price?${params}`)
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
@@ -93,6 +93,7 @@ export default function BookingForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          driver_slug: driverSlug,
           client_name: form.name,
           client_phone: form.phone,
           origin: form.origin.address,
@@ -111,7 +112,7 @@ export default function BookingForm() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      router.push(`/confirmation/${data.id}`)
+      router.push(`/${driverSlug}/confirmation/${data.id}`)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al confirmar el pedido')
     } finally {
@@ -121,15 +122,8 @@ export default function BookingForm() {
 
   const validDests = form.destinations.filter(Boolean) as Location[]
   const canStep1 = !!form.origin && form.destinations.length > 0 && validDests.length === form.destinations.length
-  const canDateTime = (() => {
-    if (!form.date || !form.time) return false
-    const selected = new Date(`${form.date}T${form.time}`)
-    const minTime = new Date()
-    minTime.setMinutes(minTime.getMinutes() + 30)
-    return selected >= minTime
-  })()
-  const timeError = form.date && form.time && !canDateTime
-    ? 'El viaje debe ser con al menos 30 minutos de anticipación' : ''
+  const canDateTime = !!(form.date && form.time)
+  const timeError = ''
 
   const isValidArgPhone = (p: string) => /^(11|15|2\d{2,3}|3\d{2,3})\d{6,8}$/.test(p.replace(/\D/g, ''))
   const canStep4 = form.name.trim().length > 1 && isValidArgPhone(form.phone)

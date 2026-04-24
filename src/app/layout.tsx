@@ -1,9 +1,15 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import PWAFix from '@/components/PWAFix'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'] })
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   title: {
@@ -20,7 +26,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={`${geist.className} bg-white antialiased`}>
+      <body className={`${geist.className} bg-white antialiased safe-x`}>
         <PWAFix />
         {children}
       </body>

@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const waypointsParam = searchParams.get('waypoints')
+  const slug = searchParams.get('slug')
 
   let points: Array<{ lat: number; lng: number }>
 
@@ -15,7 +16,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'waypoints inválidos' }, { status: 400 })
     }
   } else {
-    // Compatibilidad con el formato anterior (un solo tramo)
     const originLat = parseFloat(searchParams.get('originLat') ?? '')
     const originLng = parseFloat(searchParams.get('originLng') ?? '')
     const destLat = parseFloat(searchParams.get('destLat') ?? '')
@@ -34,7 +34,6 @@ export async function GET(req: Request) {
   let totalDistanceKm = 0
   let totalDurationMin = 0
 
-  // Llamadas secuenciales por tramo
   for (let i = 0; i < points.length - 1; i++) {
     const from = points[i]
     const to = points[i + 1]
@@ -49,9 +48,27 @@ export async function GET(req: Request) {
     totalDurationMin += el.duration.value / 60
   }
 
-  const { data: settings } = await supabase.from('settings').select('*').eq('id', 1).single()
-  const s = settings ?? DEFAULT_SETTINGS
-  const price = calculatePrice(totalDistanceKm, totalDurationMin, s)
+  let settings = DEFAULT_SETTINGS
+
+  if (slug) {
+    const { data: driver } = await supabase
+      .from('drivers')
+      .select('id')
+      .eq('slug', slug)
+      .single()
+
+    if (driver) {
+      const { data: driverSettings } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('driver_id', driver.id)
+        .single()
+
+      if (driverSettings) settings = driverSettings
+    }
+  }
+
+  const price = calculatePrice(totalDistanceKm, totalDurationMin, settings)
 
   return NextResponse.json({ distance_km: totalDistanceKm, duration_min: totalDurationMin, price_ars: price })
 }

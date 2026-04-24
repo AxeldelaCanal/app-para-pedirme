@@ -68,6 +68,22 @@ export async function emailCambiosPropuestos(ride: Ride) {
   }).catch(err => console.error('[email] emailCambiosPropuestos:', err))
 }
 
+export async function emailResetPassword(to: string, resetLink: string) {
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: '🔑 Restablecer contraseña — Panel del conductor',
+    html: `
+      <h2>Restablecer contraseña</h2>
+      <p>Recibimos una solicitud para restablecer tu contraseña. El link es válido por 1 hora.</p>
+      <br>
+      <a href="${resetLink}" style="background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Restablecer contraseña</a>
+      <br><br>
+      <p style="color:#888;font-size:12px;">Si no pediste esto, ignorá este mail. Tu contraseña no cambia.</p>
+    `,
+  }).catch(err => console.error('[email] emailResetPassword:', err))
+}
+
 export async function emailPedidoModificado(ride: Ride) {
   await resend.emails.send({
     from: FROM,

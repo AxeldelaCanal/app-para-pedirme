@@ -2,11 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import RideCard from '@/components/RideCard'
 import { supabase } from '@/lib/supabase'
-import type { Ride, RideStatus, Settings } from '@/types'
+import type { Ride, RideStatus, Settings, Driver } from '@/types'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
 import { haversineKm } from '@/lib/scheduling'
+
+const QRCodeSVG = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ssr: false })
 
 type Filter = 'all' | RideStatus
 type Period = 'today' | 'week' | 'month' | 'all'
@@ -40,13 +43,36 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<Filter>('pending')
   const [period, setPeriod] = useState<Period>('all')
   const [settings, setSettings] = useState<Omit<Settings, 'id' | 'updated_at'>>(DEFAULT_SETTINGS)
+  const [driver, setDriver] = useState<Pick<Driver, 'name' | 'slug'> | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [showQR, setShowQR] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordOk, setPasswordOk] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
   const [loading, setLoading] = useState(true)
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null)
   const [search, setSearch] = useState('')
   const [sortByProximity, setSortByProximity] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
+
+  useEffect(() => {
+    setDarkMode(localStorage.getItem('darkMode') === 'true')
+  }, [])
+
+  function toggleDark() {
+    setDarkMode(d => {
+      const next = !d
+      localStorage.setItem('darkMode', String(next))
+      return next
+    })
+  }
 
   const prevRidesRef = useRef<Ride[]>([])
 
@@ -141,6 +167,9 @@ export default function Dashboard() {
     fetch('/api/settings').then(r => r.ok ? r.json() : null).then(d => {
       if (d) setSettings(d)
     })
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) setDriver({ name: d.name, slug: d.slug })
+    })
     if ('Notification' in window) {
       setNotifPermission(Notification.permission)
       // Si ya tiene permiso, registrar SW y suscripción push
@@ -225,6 +254,44 @@ export default function Dashboard() {
     router.push('/dashboard/login')
   }
 
+  async function changePassword() {
+    setPasswordError('')
+    setPasswordOk(false)
+    if (passwordForm.next !== passwordForm.confirm) {
+      setPasswordError('Las contraseñas nuevas no coinciden')
+      return
+    }
+    if (passwordForm.next.length < 6) {
+      setPasswordError('La nueva contraseña debe tener al menos 6 caracteres')
+      return
+    }
+    setSavingPassword(true)
+    const res = await fetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: passwordForm.current, newPassword: passwordForm.next }),
+    })
+    setSavingPassword(false)
+    if (res.ok) {
+      setPasswordOk(true)
+      setPasswordForm({ current: '', next: '', confirm: '' })
+    } else {
+      const d = await res.json()
+      setPasswordError(d.error ?? 'Error al cambiar la contraseña')
+    }
+  }
+
+  async function deleteAccount() {
+    setDeletingAccount(true)
+    const res = await fetch('/api/auth/me', { method: 'DELETE' })
+    if (res.ok) {
+      router.push('/')
+    } else {
+      setDeletingAccount(false)
+      setConfirmDeleteAccount(false)
+    }
+  }
+
   async function saveSettings() {
     setSavingSettings(true)
     await fetch('/api/settings', {
@@ -237,6 +304,22 @@ export default function Dashboard() {
   }
 
   const STATUS_ORDER: Record<RideStatus, number> = { pending: 0, accepted: 1, completed: 2, cancelled: 3, rejected: 4 }
+
+  function groupByDate(rides: Ride[]): { label: string; rides: Ride[] }[] {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const tomorrowStart = new Date(todayStart.getTime() + 86_400_000)
+    const weekEnd = new Date(todayStart.getTime() + 7 * 86_400_000)
+
+    const groups = [
+      { label: 'Hoy', rides: rides.filter(r => { const d = new Date(r.scheduled_at); return d >= todayStart && d < tomorrowStart }) },
+      { label: 'Mañana', rides: rides.filter(r => { const d = new Date(r.scheduled_at); return d >= tomorrowStart && d < new Date(tomorrowStart.getTime() + 86_400_000) }) },
+      { label: 'Esta semana', rides: rides.filter(r => { const d = new Date(r.scheduled_at); return d >= new Date(tomorrowStart.getTime() + 86_400_000) && d < weekEnd }) },
+      { label: 'Más adelante', rides: rides.filter(r => new Date(r.scheduled_at) >= weekEnd) },
+      { label: 'Anteriores', rides: rides.filter(r => new Date(r.scheduled_at) < todayStart) },
+    ]
+    return groups.filter(g => g.rides.length > 0)
+  }
 
   const range = periodRange(period)
   const byPeriod = range
@@ -282,131 +365,187 @@ export default function Dashboard() {
   const hasActiveFilters = period !== 'all' || sortByProximity
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className={darkMode ? 'dark' : ''}>
+    <main className="min-h-screen bg-gray-50 dark:bg-gray-950 safe-bottom">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <h1 className="font-bold text-gray-900">Mis pedidos</h1>
+      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-10 safe-top">
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="font-bold text-gray-900 dark:text-white truncate">Mis pedidos</h1>
           {pendingCount > 0 && (
-            <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white">
+            <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white shrink-0">
               {pendingCount}
             </span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {notifPermission !== null && notifPermission !== 'granted' && (
-            <button
-              onClick={requestNotifications}
-              className="rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-1.5 text-sm font-medium text-yellow-700"
-            >
-              Activar alertas
+            <button onClick={requestNotifications}
+              className="rounded-lg border border-yellow-300 bg-yellow-50 px-2.5 py-1.5 text-xs font-medium text-yellow-700 shrink-0">
+              🔔
             </button>
           )}
-          <button
-            onClick={() => setShowFilters(s => !s)}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-              hasActiveFilters
-                ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                : 'border-gray-200 text-gray-700'
-            }`}
-          >
-            Filtros{hasActiveFilters ? ' ·' : ''}
+          <button onClick={toggleDark}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 w-9 h-9 flex items-center justify-center text-gray-700 dark:text-gray-300">
+            {darkMode ? '☀️' : '🌙'}
           </button>
           <button
-            onClick={() => setShowSettings(s => !s)}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700"
-          >
-            Tarifas
+            onClick={() => { setShowFilters(s => !s); setShowMenu(false) }}
+            className={`rounded-lg border w-9 h-9 flex items-center justify-center text-base font-bold transition-colors ${
+              hasActiveFilters ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+            }`}>
+            {hasActiveFilters ? '≡·' : '≡'}
           </button>
           <button
-            onClick={logout}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700"
-          >
-            Salir
+            onClick={() => setShowMenu(s => !s)}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 w-9 h-9 flex items-center justify-center text-gray-700 dark:text-gray-300">
+            ⚙
           </button>
         </div>
       </header>
 
+      {/* Menú desplegable */}
+      {showMenu && (
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex flex-wrap gap-2">
+          <button onClick={() => { setShowQR(s => !s); setShowMenu(false) }}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            QR
+          </button>
+          <button onClick={() => { setShowSettings(s => !s); setShowMenu(false) }}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            Tarifas
+          </button>
+          <button onClick={() => { setShowAccount(s => !s); setShowMenu(false) }}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            Cuenta
+          </button>
+          <button onClick={logout}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400">
+            Salir
+          </button>
+        </div>
+      )}
+
+      {/* QR Panel */}
+      {showQR && driver && (
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-5 flex flex-col items-center gap-4">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white">Tu link de reservas</p>
+          <QRCodeSVG
+            value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
+            size={180}
+            bgColor={darkMode ? '#111827' : '#ffffff'}
+            fgColor={darkMode ? '#ffffff' : '#0f172a'}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center break-all">
+            {typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/{driver.slug}
+          </p>
+          <button
+            onClick={() => navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`)}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Copiar link
+          </button>
+        </div>
+      )}
+
       {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-white border-b border-gray-100 px-4 py-4">
-          <h2 className="font-semibold text-gray-900 mb-3 text-sm">Configurar tarifas (ARS)</h2>
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4">
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">Configurar tarifas (ARS)</h2>
           <div className="grid grid-cols-2 gap-3">
-            {(
-              [
-                ['base_fare', 'Tarifa base'],
-                ['price_per_km', 'Por km'],
-                ['price_per_min', 'Por minuto'],
-                ['booking_fee', 'Cargo reserva'],
-              ] as const
-            ).map(([key, label]) => (
+            {(['base_fare', 'price_per_km', 'price_per_min', 'booking_fee'] as const).map((key) => (
               <div key={key} className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">{label}</label>
-                <input
-                  type="number"
-                  value={settings[key]}
+                <label className="text-xs text-gray-500 dark:text-gray-400">
+                  {key === 'base_fare' ? 'Tarifa base' : key === 'price_per_km' ? 'Por km' : key === 'price_per_min' ? 'Por minuto' : 'Cargo reserva'}
+                </label>
+                <input type="number" value={settings[key]}
                   onChange={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
                 />
               </div>
             ))}
           </div>
-          <div className="flex flex-col gap-1 col-span-2">
-            <label className="text-xs text-gray-500">Tu teléfono (para cancelaciones)</label>
-            <input
-              type="tel"
-              placeholder="2235304242"
-              value={settings.driver_phone ?? ''}
+          <div className="flex flex-col gap-1 mt-3">
+            <label className="text-xs text-gray-500 dark:text-gray-400">Tu teléfono (para cancelaciones)</label>
+            <input type="tel" placeholder="2235304242" value={settings.driver_phone ?? ''}
               onChange={e => setSettings(s => ({ ...s, driver_phone: e.target.value }))}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
             />
           </div>
-          <button
-            onClick={saveSettings}
-            disabled={savingSettings}
-            className="mt-3 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-          >
+          <button onClick={saveSettings} disabled={savingSettings}
+            className="mt-3 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
             {savingSettings ? 'Guardando...' : 'Guardar tarifas'}
           </button>
         </div>
       )}
 
+      {/* Account Panel */}
+      {showAccount && (
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex flex-col gap-4">
+          <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar contraseña</h2>
+          <div className="flex flex-col gap-2">
+            {(['current', 'next', 'confirm'] as const).map((field) => (
+              <input key={field} type="password"
+                placeholder={field === 'current' ? 'Contraseña actual' : field === 'next' ? 'Nueva contraseña' : 'Repetir nueva contraseña'}
+                value={passwordForm[field]}
+                onChange={e => setPasswordForm(f => ({ ...f, [field]: e.target.value }))}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+              />
+            ))}
+          </div>
+          {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+          {passwordOk && <p className="text-xs text-emerald-600 font-medium">Contraseña actualizada correctamente</p>}
+          <button onClick={changePassword} disabled={savingPassword || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
+            className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+            {savingPassword ? 'Guardando...' : 'Actualizar contraseña'}
+          </button>
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+            <h2 className="font-semibold text-red-600 text-sm mb-2">Zona de peligro</h2>
+            {!confirmDeleteAccount ? (
+              <button onClick={() => setConfirmDeleteAccount(true)}
+                className="w-full rounded-xl border border-red-200 dark:border-red-900 py-2.5 text-sm font-semibold text-red-600">
+                Eliminar mi cuenta
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-red-500">Esto elimina tu cuenta y todos tus viajes. No tiene vuelta atrás.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirmDeleteAccount(false)}
+                    className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300">
+                    Cancelar
+                  </button>
+                  <button onClick={deleteAccount} disabled={deletingAccount}
+                    className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+                    {deletingAccount ? 'Eliminando...' : 'Sí, eliminar'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filters Panel */}
       {showFilters && (
-        <div className="bg-white border-b border-gray-100 px-4 py-4 flex flex-col gap-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex flex-col gap-4">
           <div>
-            <p className="text-xs text-gray-500 mb-2 font-medium">Período</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Período</p>
             <div className="flex gap-2 flex-wrap">
-              {([
-                ['today', 'Hoy'],
-                ['week', 'Esta semana'],
-                ['month', 'Este mes'],
-                ['all', 'Todo'],
-              ] as const).map(([p, label]) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
+              {(['today', 'week', 'month', 'all'] as const).map((p) => (
+                <button key={p} onClick={() => setPeriod(p)}
                   className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                    period === p
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white border border-gray-200 text-gray-700'
-                  }`}
-                >
-                  {label}
+                    period === p ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}>
+                  {p === 'today' ? 'Hoy' : p === 'week' ? 'Esta semana' : p === 'month' ? 'Este mes' : 'Todo'}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-2 font-medium">Ordenar por</p>
-            <button
-              onClick={() => setSortByProximity(s => !s)}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Ordenar por</p>
+            <button onClick={() => setSortByProximity(s => !s)}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                sortByProximity
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white border border-gray-200 text-gray-700'
-              }`}
-            >
+                sortByProximity ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+              }`}>
               Proximidad
             </button>
           </div>
@@ -427,27 +566,23 @@ export default function Dashboard() {
         return (
           <div className="mx-4 mt-3 flex flex-col gap-2">
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
-                <p className="text-xs text-gray-400 mb-1">{periodLabel}</p>
-                <p className="font-bold text-gray-900 text-sm">${earnedTotal.toLocaleString('es-AR')}</p>
-                {projectedTotal > 0 && (
-                  <p className="text-xs text-emerald-500">+${projectedTotal.toLocaleString('es-AR')}</p>
-                )}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-3 text-center shadow-sm">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{periodLabel}</p>
+                <p className="font-bold text-gray-900 dark:text-white text-sm">${earnedTotal.toLocaleString('es-AR')}</p>
+                {projectedTotal > 0 && <p className="text-xs text-emerald-500">+${projectedTotal.toLocaleString('es-AR')}</p>}
               </div>
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
-                <p className="text-xs text-gray-400 mb-1">Completados</p>
-                <p className="font-bold text-gray-900 text-sm">{done.length}</p>
-                {confirmed.length > 0 && (
-                  <p className="text-xs text-emerald-500">+{confirmed.length} conf.</p>
-                )}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-3 text-center shadow-sm">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Completados</p>
+                <p className="font-bold text-gray-900 dark:text-white text-sm">{done.length}</p>
+                {confirmed.length > 0 && <p className="text-xs text-emerald-500">+{confirmed.length} conf.</p>}
               </div>
-              <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
-                <p className="text-xs text-gray-400 mb-1">Promedio</p>
-                <p className="font-bold text-gray-900 text-sm">${avg.toLocaleString('es-AR')}</p>
+              <div className="bg-white dark:bg-gray-900 rounded-2xl p-3 text-center shadow-sm">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">Promedio</p>
+                <p className="font-bold text-gray-900 dark:text-white text-sm">${avg.toLocaleString('es-AR')}</p>
               </div>
             </div>
             {lostTotal > 0 && (
-              <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-2.5 flex justify-between items-center">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900 rounded-2xl px-4 py-2.5 flex justify-between items-center">
                 <p className="text-xs text-red-400">Perdido por cancelaciones ({cancelled.length})</p>
                 <p className="text-sm font-bold text-red-400">-${lostTotal.toLocaleString('es-AR')}</p>
               </div>
@@ -458,37 +593,23 @@ export default function Dashboard() {
 
       {/* Status filters */}
       <div className="px-4 pt-4 flex gap-2 overflow-x-auto pb-1">
-        {(['pending', 'accepted', 'completed', 'cancelled', 'rejected', 'all'] as const).map(f => {
-          const label = f === 'pending' ? 'Pendientes'
-            : f === 'accepted' ? 'En curso'
-            : f === 'completed' ? 'Completados'
-            : f === 'cancelled' ? 'Cancelados'
-            : f === 'rejected' ? 'Rechazados'
-            : 'Todos'
+        {(['pending', 'accepted', 'completed', 'all', 'rejected', 'cancelled'] as const).map(f => {
+          const label = f === 'pending' ? 'Pendientes' : f === 'accepted' ? 'En curso' : f === 'completed' ? 'Completados' : f === 'cancelled' ? 'Cancelados' : f === 'rejected' ? 'Rechazados' : 'Todos'
           const pendingChangesCount = acceptedRides.filter(r => r.pending_changes).length
           const activeCount = f === 'accepted' ? acceptedRides.length : 0
           return (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
+            <button key={f} onClick={() => setFilter(f)}
               className={`shrink-0 flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                filter === f
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-white border border-gray-200 text-gray-700'
-              }`}
-            >
+                filter === f ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+              }`}>
               {label}
               {activeCount > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                  filter === f ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'
-                }`}>
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${filter === f ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'}`}>
                   {activeCount}
                 </span>
               )}
               {f === 'accepted' && pendingChangesCount > 0 && (
-                <span className="rounded-full px-1.5 py-0.5 text-xs font-bold bg-amber-400 text-white">
-                  {pendingChangesCount} ✏️
-                </span>
+                <span className="rounded-full px-1.5 py-0.5 text-xs font-bold bg-amber-400 text-white">{pendingChangesCount} ✏️</span>
               )}
             </button>
           )
@@ -497,34 +618,43 @@ export default function Dashboard() {
 
       {/* Search */}
       <div className="px-4 pt-3">
-        <input
-          type="text"
-          placeholder="Buscar por nombre..."
-          value={search}
+        <input type="text" placeholder="Buscar por nombre..." value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500"
+          className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-4 py-2.5 text-sm outline-none focus:border-emerald-500 placeholder:text-gray-400 dark:placeholder:text-gray-500"
         />
       </div>
 
-      {/* List */}
+      {/* List con agrupación por fecha */}
       <div className="px-4 py-4 flex flex-col gap-3">
         {loading ? (
           <p className="text-center text-gray-400 py-10 text-sm">Cargando...</p>
         ) : filtered.length === 0 ? (
-          <p className="text-center text-gray-400 py-10 text-sm">No hay pedidos aquí</p>
+          <p className="text-center text-gray-400 dark:text-gray-500 py-10 text-sm">No hay pedidos aquí</p>
         ) : (
-          filtered.map(ride => (
-            <RideCard
-              key={ride.id}
-              ride={ride}
-              acceptedRides={acceptedRides}
-              onStatusChange={handleStatusChange}
-              onRideUpdate={handleRideUpdate}
-              onDelete={handleDelete}
-            />
+          groupByDate(filtered).map(group => (
+            <div key={group.label} className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  {group.label}
+                </span>
+                <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+                <span className="text-xs text-gray-400 dark:text-gray-500">{group.rides.length}</span>
+              </div>
+              {group.rides.map(ride => (
+                <RideCard
+                  key={ride.id}
+                  ride={ride}
+                  acceptedRides={acceptedRides}
+                  onStatusChange={handleStatusChange}
+                  onRideUpdate={handleRideUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
           ))
         )}
       </div>
     </main>
+    </div>
   )
 }

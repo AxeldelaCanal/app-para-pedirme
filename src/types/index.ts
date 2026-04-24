@@ -1,5 +1,14 @@
 export type RideStatus = 'pending' | 'accepted' | 'rejected' | 'completed' | 'cancelled'
 
+export interface Driver {
+  id: string
+  name: string
+  slug: string
+  email: string
+  phone?: string
+  created_at: string
+}
+
 export interface Ride {
   id: string
   client_name: string

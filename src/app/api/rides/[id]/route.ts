@@ -37,7 +37,6 @@ export async function PATCH(
     pending_changes?: PendingChanges | null
   } = await req.json()
 
-  // Aceptar cambios propuestos: aplicar pending_changes al ride y limpiar
   if (body.action === 'accept_changes') {
     const { data: ride, error: fetchErr } = await supabase
       .from('rides').select('pending_changes').eq('id', id).single()
@@ -54,7 +53,6 @@ export async function PATCH(
     return NextResponse.json(data)
   }
 
-  // Rechazar cambios: solo limpiar pending_changes
   if (body.action === 'reject_changes') {
     const { data, error } = await supabase
       .from('rides')
@@ -74,17 +72,16 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Notificar al conductor por acciones del cliente: cancelación, cambios propuestos, ride vuelto a pendiente
   const needsPush =
     body.status === 'cancelled' ||
     (body.pending_changes != null) ||
     (body.status === 'pending' && (body.origin || body.scheduled_at || body.destinations))
 
-  if (needsPush) {
+  if (needsPush && data.driver_id) {
     const { data: settingsRow } = await supabase
       .from('settings')
       .select('push_subscription')
-      .eq('id', 1)
+      .eq('driver_id', data.driver_id)
       .single()
 
     if (settingsRow?.push_subscription) {
