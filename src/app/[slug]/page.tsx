@@ -3,6 +3,11 @@ import { supabase } from '@/lib/supabase'
 import BookingForm from '@/components/BookingForm'
 import InstallButton from '@/components/InstallButton'
 
+function formatName(name: string) {
+  const clean = name.replace(/[-_.]+/g, ' ').trim()
+  return clean.charAt(0).toUpperCase() + clean.slice(1)
+}
+
 export default async function DriverPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
@@ -28,7 +33,7 @@ export default async function DriverPage({ params }: { params: Promise<{ slug: s
           </div>
           <h1 className="text-4xl font-bold text-white leading-tight">
             Reservá con<br />
-            <span className="text-emerald-400">{driver.name}</span>
+            <span className="text-emerald-400">{formatName(driver.name)}</span>
           </h1>
           <p className="mt-3 text-slate-400 text-sm leading-relaxed">
             Precio fijo, sin sorpresas.<br />Confirmación directa por WhatsApp.
