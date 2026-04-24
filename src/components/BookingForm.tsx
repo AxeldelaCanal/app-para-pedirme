@@ -12,6 +12,7 @@ type Step = 1 | 2 | 3 | 4
 interface FormState {
   origin: Location | null
   destinations: (Location | null)[]
+  asap: boolean
   date: string
   time: string
   name: string
@@ -27,6 +28,7 @@ function localToday() {
 const EMPTY: FormState = {
   origin: null,
   destinations: [null],
+  asap: false,
   date: localToday(),
   time: '',
   name: '',
@@ -103,7 +105,7 @@ export default function BookingForm({ driverSlug }: { driverSlug: string }) {
           destination_lat: finalDest.lat,
           destination_lng: finalDest.lng,
           destinations: validDests,
-          scheduled_at: new Date(`${form.date}T${form.time}`).toISOString(),
+          scheduled_at: form.asap ? new Date().toISOString() : new Date(`${form.date}T${form.time}`).toISOString(),
           distance_km: estimate.distance_km,
           duration_min: estimate.duration_min,
           price_ars: estimate.price_ars,
@@ -122,7 +124,7 @@ export default function BookingForm({ driverSlug }: { driverSlug: string }) {
 
   const validDests = form.destinations.filter(Boolean) as Location[]
   const canStep1 = !!form.origin && form.destinations.length > 0 && validDests.length === form.destinations.length
-  const canDateTime = !!(form.date && form.time)
+  const canDateTime = form.asap || !!(form.date && form.time)
   const timeError = ''
 
   const isValidArgPhone = (p: string) => /^(11|15|2\d{2,3}|3\d{2,3})\d{6,8}$/.test(p.replace(/\D/g, ''))
@@ -268,26 +270,51 @@ export default function BookingForm({ driverSlug }: { driverSlug: string }) {
               <span className="font-bold text-emerald-700">${estimate.price_ars.toLocaleString('es-AR')}</span>
             </div>
           )}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Fecha</label>
-            <input
-              type="date"
-              min={localToday()}
-              max={`${new Date().getFullYear() + 1}-12-31`}
-              value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Hora</label>
-            <input
-              type="time"
-              value={form.time}
-              onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setForm(f => ({ ...f, asap: !f.asap }))}
+            className={`flex items-center gap-3 w-full rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+              form.asap
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                : 'border-gray-200 bg-white text-gray-700'
+            }`}
+          >
+            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+              form.asap ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'
+            }`}>
+              {form.asap && (
+                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </span>
+            Lo antes posible
+          </button>
+
+          {!form.asap && (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Fecha</label>
+                <input
+                  type="date"
+                  min={localToday()}
+                  max={`${new Date().getFullYear() + 1}-12-31`}
+                  value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-gray-700">Hora</label>
+                <input
+                  type="time"
+                  value={form.time}
+                  onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+              </div>
+            </>
+          )}
           {timeError && <p className="text-xs text-red-500">{timeError}</p>}
           <div className="flex gap-3">
             <button onClick={() => setStep(2)} className="flex-1 rounded-2xl border border-gray-200 py-4 font-semibold text-gray-600">
