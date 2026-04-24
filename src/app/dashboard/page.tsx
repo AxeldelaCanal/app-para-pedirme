@@ -596,16 +596,16 @@ export default function Dashboard() {
         {(['pending', 'accepted', 'completed', 'all', 'rejected', 'cancelled'] as const).map(f => {
           const label = f === 'pending' ? 'Pendientes' : f === 'accepted' ? 'En curso' : f === 'completed' ? 'Completados' : f === 'cancelled' ? 'Cancelados' : f === 'rejected' ? 'Rechazados' : 'Todos'
           const pendingChangesCount = acceptedRides.filter(r => r.pending_changes).length
-          const activeCount = f === 'accepted' ? acceptedRides.length : 0
+          const badgeCount = f === 'accepted' ? acceptedRides.length : f === 'pending' ? pendingCount : 0
           return (
             <button key={f} onClick={() => setFilter(f)}
               className={`shrink-0 flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 filter === f ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
               }`}>
               {label}
-              {activeCount > 0 && (
+              {badgeCount > 0 && (
                 <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${filter === f ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'}`}>
-                  {activeCount}
+                  {badgeCount}
                 </span>
               )}
               {f === 'accepted' && pendingChangesCount > 0 && (
@@ -654,6 +654,56 @@ export default function Dashboard() {
           ))
         )}
       </div>
+      {/* Botón flotante QR */}
+      {driver && (
+        <>
+          <button
+            onClick={() => setShowQR(s => !s)}
+            className="fixed bottom-6 right-4 z-40 w-14 h-14 rounded-full bg-emerald-500 shadow-lg flex items-center justify-center text-white"
+            aria-label="Ver QR"
+          >
+            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
+            </svg>
+          </button>
+
+          {showQR && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 pb-6" onClick={() => setShowQR(false)}>
+              <div className="bg-white dark:bg-gray-900 rounded-3xl p-6 w-full max-w-sm flex flex-col items-center gap-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Tu link de reservas</p>
+                <QRCodeSVG
+                  value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
+                  size={200}
+                  bgColor={darkMode ? '#111827' : '#ffffff'}
+                  fgColor={darkMode ? '#ffffff' : '#0f172a'}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center break-all">
+                  {typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/{driver.slug}
+                </p>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/${driver.slug}`)}
+                    className="flex-1 rounded-2xl border border-gray-200 dark:border-gray-700 py-3 text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    Copiar link
+                  </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`Reservá tu viaje: ${window.location.origin}/${driver.slug}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 rounded-2xl bg-[#25D366] py-3 text-sm font-semibold text-white text-center"
+                  >
+                    WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </main>
     </div>
   )
