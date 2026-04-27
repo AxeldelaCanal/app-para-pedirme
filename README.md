@@ -4,7 +4,7 @@ PWA en producción para gestionar pedidos de viajes recurrentes
 entre usuarios. Resuelve el caos de coordinar traslados habituales 
 (familia, amigos, trabajo) sin perder el hilo en chats dispersos.
 
-🔗 **Demo**: https://app-para-pedirme.vercel.app
+🔗 **Demo**: https://app-para-pedirme.vercel.app/demo
 
 ---
 
