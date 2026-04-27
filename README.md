@@ -19,6 +19,15 @@ centraliza todo:
 - Ambos ven la ruta y tiempos en vivo
 - Histórico persistido para reincidencias frecuentes
 
+## Screenshots
+
+<div align="center">
+  <img src="docs/screenshots/01_formulario.jpeg" width="23%" />
+  <img src="docs/screenshots/02_precio.jpeg" width="23%" />
+  <img src="docs/screenshots/03_confirmacion.jpeg" width="23%" />
+  <img src="docs/screenshots/04_dashboard.jpeg" width="23%" />
+</div>
+
 ## Stack técnico
 
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS
