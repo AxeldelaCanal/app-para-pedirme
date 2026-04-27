@@ -55,17 +55,19 @@ export async function POST(req: Request) {
       .eq('driver_id', driver.id)
       .single()
 
-    if (settingsRow?.push_subscription) {
-      const dests = data.destinations?.length ? data.destinations : [{ address: data.destination }]
-      const lastDest = dests[dests.length - 1].address
-      await sendPush(settingsRow.push_subscription as Parameters<typeof sendPush>[0], {
-        title: 'Nuevo pedido 🚗',
-        body: `${data.client_name} · ${data.origin.split(',')[0]} → ${lastDest.split(',')[0]}`,
-        tag: 'new-ride',
-      })
-    }
+    if (driver_slug !== 'demo') {
+      if (settingsRow?.push_subscription) {
+        const dests = data.destinations?.length ? data.destinations : [{ address: data.destination }]
+        const lastDest = dests[dests.length - 1].address
+        await sendPush(settingsRow.push_subscription as Parameters<typeof sendPush>[0], {
+          title: 'Nuevo pedido 🚗',
+          body: `${data.client_name} · ${data.origin.split(',')[0]} → ${lastDest.split(',')[0]}`,
+          tag: 'new-ride',
+        })
+      }
 
-    await emailNuevoPedido(data)
+      await emailNuevoPedido(data)
+    }
 
     return NextResponse.json(data, { status: 201 })
   } catch (e) {
