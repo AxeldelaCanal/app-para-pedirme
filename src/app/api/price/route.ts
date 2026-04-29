@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { calculatePrice, DEFAULT_SETTINGS } from '@/lib/pricing'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)

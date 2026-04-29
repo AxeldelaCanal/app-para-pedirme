@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { getDriverId } from '@/lib/auth'
 
 export async function POST(req: Request) {
@@ -8,25 +8,14 @@ export async function POST(req: Request) {
 
   const subscription = await req.json()
 
-  const { data: updated, error } = await supabase
+  const { error } = await supabase
     .from('settings')
     .update({ push_subscription: subscription })
     .eq('driver_id', driverId)
-    .select('driver_id')
 
   if (error) {
     console.error('[push POST] update error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  if (!updated?.length) {
-    const { error: insertError } = await supabase
-      .from('settings')
-      .insert({ driver_id: driverId, push_subscription: subscription })
-    if (insertError) {
-      console.error('[push POST] insert error:', insertError)
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
   }
   return NextResponse.json({ ok: true })
 }

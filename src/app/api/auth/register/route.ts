@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
 import { emailVerificacion } from '@/lib/email'
 import bcrypt from 'bcryptjs'

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { sendPush } from '@/lib/push'
 import { emailCancelacion, emailCambiosPropuestos, emailPedidoModificado } from '@/lib/email'
 import type { RideStatus, PendingChanges } from '@/types'
