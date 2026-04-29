@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import RideCard from '@/components/RideCard'
+import InstallButton from '@/components/InstallButton'
 import { supabase } from '@/lib/supabase'
 import type { Ride, RideStatus, Settings, Driver } from '@/types'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
@@ -441,6 +442,7 @@ export default function Dashboard() {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <InstallButton className="rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 inline-flex items-center gap-1.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800" />
           {notifPermission !== null && notifPermission !== 'granted' && (
             <button onClick={requestNotifications}
               className="rounded-lg border border-yellow-300 bg-yellow-50 px-2.5 py-1.5 text-xs font-medium text-yellow-700 shrink-0">
