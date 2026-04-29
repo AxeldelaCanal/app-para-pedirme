@@ -65,7 +65,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<Filter>('pending')
   const [period, setPeriod] = useState<Period>('all')
   const [settings, setSettings] = useState<Omit<Settings, 'id' | 'updated_at'>>(DEFAULT_SETTINGS)
-  const [driver, setDriver] = useState<Pick<Driver, 'name' | 'slug'> | null>(null)
+  const [driver, setDriver] = useState<Pick<Driver, 'name' | 'slug' | 'email'> | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -76,6 +76,10 @@ export default function Dashboard() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordOk, setPasswordOk] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+  const [emailForm, setEmailForm] = useState({ newEmail: '', currentPassword: '' })
+  const [emailError, setEmailError] = useState('')
+  const [emailOk, setEmailOk] = useState(false)
+  const [savingEmail, setSavingEmail] = useState(false)
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -206,7 +210,7 @@ export default function Dashboard() {
       if (d) setSettings(d)
     })
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => {
-      if (d) setDriver({ name: d.name, slug: d.slug })
+      if (d) setDriver({ name: d.name, slug: d.slug, email: d.email })
     })
     if ('Notification' in window) {
       setNotifPermission(Notification.permission)
@@ -290,6 +294,27 @@ export default function Dashboard() {
   async function logout() {
     await fetch('/api/auth', { method: 'DELETE' })
     router.push('/dashboard/login')
+  }
+
+  async function changeEmail() {
+    setEmailError('')
+    setEmailOk(false)
+    if (!emailForm.newEmail || !emailForm.currentPassword) return
+    setSavingEmail(true)
+    const res = await fetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: emailForm.currentPassword, newEmail: emailForm.newEmail }),
+    })
+    setSavingEmail(false)
+    if (res.ok) {
+      setEmailOk(true)
+      setDriver(d => d ? { ...d, email: emailForm.newEmail } : d)
+      setEmailForm({ newEmail: '', currentPassword: '' })
+    } else {
+      const d = await res.json()
+      setEmailError(d.error ?? 'Error al cambiar el email')
+    }
   }
 
   async function changePassword() {
@@ -518,9 +543,39 @@ export default function Dashboard() {
 
       {/* Account Panel */}
       {showAccount && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex flex-col gap-4">
-          <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar contraseña</h2>
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex flex-col gap-5">
+          {/* Email actual */}
+          {driver?.email && (
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Email actual</p>
+              <p className="text-sm text-gray-900 dark:text-white font-medium">{driver.email}</p>
+            </div>
+          )}
+
+          {/* Cambiar email */}
           <div className="flex flex-col gap-2">
+            <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar email</h2>
+            <input type="email" placeholder="Nuevo email"
+              value={emailForm.newEmail}
+              onChange={e => setEmailForm(f => ({ ...f, newEmail: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+            <input type="password" placeholder="Contraseña actual (para confirmar)"
+              value={emailForm.currentPassword}
+              onChange={e => setEmailForm(f => ({ ...f, currentPassword: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            />
+            {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+            {emailOk && <p className="text-xs text-emerald-600 font-medium">Email actualizado correctamente</p>}
+            <button onClick={changeEmail} disabled={savingEmail || !emailForm.newEmail || !emailForm.currentPassword}
+              className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+              {savingEmail ? 'Guardando...' : 'Actualizar email'}
+            </button>
+          </div>
+
+          {/* Cambiar contraseña */}
+          <div className="flex flex-col gap-2 border-t border-gray-100 dark:border-gray-800 pt-4">
+            <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar contraseña</h2>
             {(['current', 'next', 'confirm'] as const).map((field) => (
               <input key={field} type="password"
                 placeholder={field === 'current' ? 'Contraseña actual' : field === 'next' ? 'Nueva contraseña' : 'Repetir nueva contraseña'}
@@ -529,13 +584,15 @@ export default function Dashboard() {
                 className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
               />
             ))}
+            {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+            {passwordOk && <p className="text-xs text-emerald-600 font-medium">Contraseña actualizada correctamente</p>}
+            <button onClick={changePassword} disabled={savingPassword || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
+              className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+              {savingPassword ? 'Guardando...' : 'Actualizar contraseña'}
+            </button>
           </div>
-          {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
-          {passwordOk && <p className="text-xs text-emerald-600 font-medium">Contraseña actualizada correctamente</p>}
-          <button onClick={changePassword} disabled={savingPassword || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
-            className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-            {savingPassword ? 'Guardando...' : 'Actualizar contraseña'}
-          </button>
+
+          {/* Zona de peligro */}
           <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
             <h2 className="font-semibold text-red-600 text-sm mb-2">Zona de peligro</h2>
             {!confirmDeleteAccount ? (

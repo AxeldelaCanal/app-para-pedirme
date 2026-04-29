@@ -68,6 +68,22 @@ export async function emailCambiosPropuestos(ride: Ride, driverEmail?: string) {
   }).catch(err => console.error('[email] emailCambiosPropuestos:', err))
 }
 
+export async function emailVerificacion(to: string, verifyLink: string) {
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: '✅ Verificá tu email — Panel del conductor',
+    html: `
+      <h2>Verificá tu email</h2>
+      <p>Hacé clic en el link para activar tu cuenta. El link es válido por 24 horas.</p>
+      <br>
+      <a href="${verifyLink}" style="background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Verificar email</a>
+      <br><br>
+      <p style="color:#888;font-size:12px;">Si no te registraste, ignorá este mail.</p>
+    `,
+  }).catch(err => console.error('[email] emailVerificacion:', err))
+}
+
 export async function emailResetPassword(to: string, resetLink: string) {
   await resend.emails.send({
     from: FROM,

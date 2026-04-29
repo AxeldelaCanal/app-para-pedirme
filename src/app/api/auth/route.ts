@@ -3,11 +3,11 @@ import { supabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 
 export async function POST(req: Request) {
-  const { email, password } = await req.json()
+  const { email, password, remember = true } = await req.json()
 
   const { data: driver } = await supabase
     .from('drivers')
-    .select('id, password_hash')
+    .select('id, password_hash, email_verified')
     .eq('email', email.toLowerCase())
     .single()
 
@@ -15,12 +15,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Email o contraseña incorrectos' }, { status: 401 })
   }
 
+  if (driver.email_verified === false) {
+    return NextResponse.json({ error: 'Verificá tu email antes de ingresar. Revisá tu casilla de correo.', unverified: true }, { status: 403 })
+  }
+
   const res = NextResponse.json({ ok: true })
   res.cookies.set('driver_id', driver.id, {
     httpOnly: true,
     sameSite: 'strict',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30,
+    ...(remember ? { maxAge: 60 * 60 * 24 * 30 } : {}),
   })
   return res
 }

@@ -54,7 +54,7 @@ export default function RegistroPage() {
       return
     }
 
-    router.push('/dashboard')
+    router.push('/dashboard/verify-email')
   }
 
   const slugValid = /^[a-z0-9-]+$/.test(form.slug)

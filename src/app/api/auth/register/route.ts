@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
+import { emailVerificacion } from '@/lib/email'
 import bcrypt from 'bcryptjs'
 
 export async function POST(req: Request) {
@@ -16,9 +17,21 @@ export async function POST(req: Request) {
 
   const password_hash = await bcrypt.hash(password, 10)
 
+  const verificationToken = crypto.randomUUID()
+  const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
   const { data: driver, error } = await supabase
     .from('drivers')
-    .insert({ name, slug, email: email.toLowerCase(), password_hash, phone: phone || null })
+    .insert({
+      name,
+      slug,
+      email: email.toLowerCase(),
+      password_hash,
+      phone: phone || null,
+      email_verified: false,
+      email_verification_token: verificationToken,
+      email_verification_token_expires_at: verificationExpires,
+    })
     .select('id, slug')
     .single()
 
@@ -39,12 +52,10 @@ export async function POST(req: Request) {
     updated_at: new Date().toISOString(),
   })
 
-  const res = NextResponse.json({ ok: true, slug: driver.slug })
-  res.cookies.set('driver_id', driver.id, {
-    httpOnly: true,
-    sameSite: 'strict',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30,
-  })
-  return res
+  const origin = new URL(req.url).origin
+  const verifyLink = `${origin}/dashboard/verify-email/${verificationToken}`
+  console.log('[register] Verify link:', verifyLink)
+  await emailVerificacion(email.toLowerCase(), verifyLink)
+
+  return NextResponse.json({ ok: true, requiresVerification: true })
 }
