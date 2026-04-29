@@ -21,7 +21,7 @@ export default function DriverSection() {
   const router = useRouter()
   const [view, setView] = useState<View>('login')
 
-  const [loginForm, setLoginForm] = useState({ email: '', password: '', remember: true })
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
 
@@ -38,7 +38,7 @@ export default function DriverSection() {
     const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: loginForm.email, password: loginForm.password, remember: loginForm.remember }),
+      body: JSON.stringify({ email: loginForm.email, password: loginForm.password }),
     })
     if (res.ok) {
       router.push('/dashboard')
@@ -128,16 +128,7 @@ export default function DriverSection() {
                 className={inputCls}
                 autoComplete="current-password"
               />
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={loginForm.remember}
-                  onChange={e => setLoginForm(f => ({ ...f, remember: e.target.checked }))}
-                  className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
-                />
-                <span className="text-slate-300 text-sm">Mantener sesión iniciada</span>
-              </label>
-              {loginError && <p className="text-xs text-red-400 text-center">{loginError}</p>}
+{loginError && <p className="text-xs text-red-400 text-center">{loginError}</p>}
               <button
                 type="submit"
                 disabled={loginLoading || !loginForm.email || !loginForm.password}

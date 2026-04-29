@@ -23,8 +23,9 @@ export async function POST(req: Request) {
   res.cookies.set('driver_id', driver.id, {
     httpOnly: true,
     sameSite: 'strict',
+    secure: true,
     path: '/',
-    ...(remember ? { maxAge: 60 * 60 * 24 * 30 } : {}),
+    maxAge: 60 * 60 * 24 * 30,
   })
   return res
 }
