@@ -11,11 +11,18 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
 export async function sendPush(
   subscription: webpush.PushSubscription,
   payload: { title: string; body: string; tag?: string }
-) {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return
+): Promise<{ expired: boolean }> {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return { expired: false }
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload))
-  } catch (err) {
+    return { expired: false }
+  } catch (err: unknown) {
+    const status = (err as { statusCode?: number }).statusCode
+    if (status === 410 || status === 404) {
+      // Suscripción expirada o inválida — el caller debe limpiarla de la DB
+      return { expired: true }
+    }
     console.error('[push] Error enviando notificación:', err)
+    return { expired: false }
   }
 }

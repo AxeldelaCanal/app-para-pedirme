@@ -85,6 +85,8 @@ export default function Dashboard() {
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [loading, setLoading] = useState(true)
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null)
+  const [isIOS, setIsIOS] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
   const [search, setSearch] = useState('')
   const [sortByProximity, setSortByProximity] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
@@ -213,9 +215,13 @@ export default function Dashboard() {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => {
       if (d) setDriver({ name: d.name, slug: d.slug, email: d.email })
     })
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
+    setIsIOS(ios)
+    setIsStandalone(standalone)
+
     if ('Notification' in window) {
       setNotifPermission(Notification.permission)
-      // Si ya tiene permiso, registrar SW y suscripción push
       if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(console.error)
       }
@@ -454,12 +460,6 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <InstallButton className="rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 inline-flex items-center gap-1.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800" />
-          {notifPermission !== null && notifPermission !== 'granted' && (
-            <button onClick={requestNotifications}
-              className="rounded-lg border border-yellow-300 bg-yellow-50 px-2.5 py-1.5 text-xs font-medium text-yellow-700 shrink-0">
-              🔔
-            </button>
-          )}
           <button onClick={toggleDark}
             className="rounded-lg border border-gray-200 dark:border-gray-700 w-9 h-9 flex items-center justify-center text-gray-700 dark:text-gray-300">
             {darkMode ? '☀️' : '🌙'}
@@ -656,6 +656,50 @@ export default function Dashboard() {
               }`}>
               Proximidad
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner de notificaciones */}
+      {notifPermission !== null && notifPermission !== 'granted' && (
+        <div className={`mx-4 mt-3 rounded-2xl px-4 py-3 flex items-start gap-3 ${
+          notifPermission === 'denied'
+            ? 'bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900'
+            : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900'
+        }`}>
+          <span className="text-xl shrink-0 mt-0.5">
+            {notifPermission === 'denied' ? '🔕' : '🔔'}
+          </span>
+          <div className="flex-1 min-w-0">
+            {notifPermission === 'denied' ? (
+              <>
+                <p className="text-sm font-semibold text-red-700 dark:text-red-400">Notificaciones bloqueadas</p>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                  {isIOS
+                    ? 'Ir a Configuración del iPhone → Safari → Notificaciones para habilitarlas.'
+                    : 'Habilitarlas desde la configuración del navegador (ícono 🔒 en la barra de dirección).'}
+                </p>
+              </>
+            ) : isIOS && !isStandalone ? (
+              <>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Instalá la app para activar notificaciones</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                  En iPhone solo funcionan desde la app instalada.<br />
+                  Safari → <strong>Compartir</strong> → <strong>Agregar a inicio</strong> → abrí la app desde ahí.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Activá las notificaciones</p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">Para recibir alertas de nuevos pedidos aunque tengas el panel cerrado.</p>
+                <button
+                  onClick={requestNotifications}
+                  className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Activar ahora
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

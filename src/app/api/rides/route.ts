@@ -59,11 +59,14 @@ export async function POST(req: Request) {
       if (settingsRow?.push_subscription) {
         const dests = data.destinations?.length ? data.destinations : [{ address: data.destination }]
         const lastDest = dests[dests.length - 1].address
-        await sendPush(settingsRow.push_subscription as Parameters<typeof sendPush>[0], {
+        const { expired } = await sendPush(settingsRow.push_subscription as Parameters<typeof sendPush>[0], {
           title: 'Nuevo pedido 🚗',
           body: `${data.client_name} · ${data.origin.split(',')[0]} → ${lastDest.split(',')[0]}`,
           tag: 'new-ride',
         })
+        if (expired) {
+          await supabase.from('settings').update({ push_subscription: null }).eq('driver_id', driver.id)
+        }
       }
 
       await emailNuevoPedido(data, driver.email)

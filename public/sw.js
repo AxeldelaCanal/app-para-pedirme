@@ -3,16 +3,13 @@ self.addEventListener('push', (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si hay una ventana enfocada, la página maneja la notificación vía polling
       const hasFocus = clientList.some((c) => c.focused)
       if (hasFocus) return
 
       return self.registration.showNotification(data.title ?? 'Nuevo pedido', {
         body: data.body ?? '',
         icon: '/icon-192.png',
-        badge: '/icon-192.png',
         tag: data.tag ?? 'ride',
-        renotify: true,
         data: { url: '/dashboard' },
       })
     })
