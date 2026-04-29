@@ -8,13 +8,25 @@ export async function POST(req: Request) {
 
   const subscription = await req.json()
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('settings')
-    .upsert({ driver_id: driverId, push_subscription: subscription }, { onConflict: 'driver_id' })
+    .update({ push_subscription: subscription })
+    .eq('driver_id', driverId)
+    .select('driver_id')
 
   if (error) {
-    console.error('[push POST] upsert error:', error)
+    console.error('[push POST] update error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (!updated?.length) {
+    const { error: insertError } = await supabase
+      .from('settings')
+      .insert({ driver_id: driverId, push_subscription: subscription })
+    if (insertError) {
+      console.error('[push POST] insert error:', insertError)
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
+    }
   }
   return NextResponse.json({ ok: true })
 }
