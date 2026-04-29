@@ -10,10 +10,12 @@ export async function POST(req: Request) {
 
   const { error } = await supabase
     .from('settings')
-    .update({ push_subscription: subscription })
-    .eq('driver_id', driverId)
+    .upsert({ driver_id: driverId, push_subscription: subscription }, { onConflict: 'driver_id' })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[push POST] upsert error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
   return NextResponse.json({ ok: true })
 }
 
