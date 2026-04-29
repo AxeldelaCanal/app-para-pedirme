@@ -25,7 +25,7 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus()
         }
       }
-      return clients.openWindow('/dashboard')
+      return clients.openWindow(self.registration.scope + 'dashboard')
     })
   )
 })
