@@ -1,7 +1,15 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import BookingForm from '@/components/BookingForm'
 import InstallButton from '@/components/InstallButton'
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await params
+  return { manifest: `/api/manifest/${slug}` }
+}
 
 function formatName(name: string) {
   const clean = name.replace(/[-_.]+/g, ' ').trim()

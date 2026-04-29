@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     // Resolver driver_id a partir del slug
     const { data: driver, error: driverErr } = await supabase
       .from('drivers')
-      .select('id')
+      .select('id, email')
       .eq('slug', driver_slug)
       .single()
 
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
         })
       }
 
-      await emailNuevoPedido(data)
+      await emailNuevoPedido(data, driver.email)
     }
 
     return NextResponse.json(data, { status: 201 })

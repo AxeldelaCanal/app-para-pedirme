@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import type { Ride } from '@/types'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const TO = process.env.NOTIFICATION_EMAIL!
+const FALLBACK_TO = process.env.NOTIFICATION_EMAIL!
 const FROM = process.env.RESEND_FROM ?? 'onboarding@resend.dev'
 
 function formatDate(iso: string) {
@@ -19,10 +19,10 @@ function rideStops(ride: Ride) {
   return [ride.origin, ...dests].join(' → ')
 }
 
-export async function emailNuevoPedido(ride: Ride) {
+export async function emailNuevoPedido(ride: Ride, driverEmail?: string) {
   await resend.emails.send({
     from: FROM,
-    to: TO,
+    to: driverEmail ?? FALLBACK_TO,
     subject: `🚗 Nuevo pedido — ${ride.client_name}`,
     html: `
       <h2>Nuevo pedido de viaje</h2>
@@ -38,10 +38,10 @@ export async function emailNuevoPedido(ride: Ride) {
   }).catch(err => console.error('[email] emailNuevoPedido:', err))
 }
 
-export async function emailCancelacion(ride: Ride) {
+export async function emailCancelacion(ride: Ride, driverEmail?: string) {
   await resend.emails.send({
     from: FROM,
-    to: TO,
+    to: driverEmail ?? FALLBACK_TO,
     subject: `❌ Viaje cancelado — ${ride.client_name}`,
     html: `
       <h2>Viaje cancelado</h2>
@@ -52,10 +52,10 @@ export async function emailCancelacion(ride: Ride) {
   }).catch(err => console.error('[email] emailCancelacion:', err))
 }
 
-export async function emailCambiosPropuestos(ride: Ride) {
+export async function emailCambiosPropuestos(ride: Ride, driverEmail?: string) {
   await resend.emails.send({
     from: FROM,
-    to: TO,
+    to: driverEmail ?? FALLBACK_TO,
     subject: `✏️ Cambios propuestos — ${ride.client_name}`,
     html: `
       <h2>El cliente propuso cambios en un viaje aceptado</h2>
@@ -84,10 +84,10 @@ export async function emailResetPassword(to: string, resetLink: string) {
   }).catch(err => console.error('[email] emailResetPassword:', err))
 }
 
-export async function emailPedidoModificado(ride: Ride) {
+export async function emailPedidoModificado(ride: Ride, driverEmail?: string) {
   await resend.emails.send({
     from: FROM,
-    to: TO,
+    to: driverEmail ?? FALLBACK_TO,
     subject: `🕐 Pedido modificado — ${ride.client_name}`,
     html: `
       <h2>El cliente modificó su pedido</h2>

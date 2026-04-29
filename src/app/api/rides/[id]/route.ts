@@ -78,12 +78,12 @@ export async function PATCH(
     (body.status === 'pending' && (body.origin || body.scheduled_at || body.destinations))
 
   if (needsPush && data.driver_id) {
-    const { data: settingsRow } = await supabase
-      .from('settings')
-      .select('push_subscription')
-      .eq('driver_id', data.driver_id)
-      .single()
+    const [{ data: settingsRow }, { data: driverRow }] = await Promise.all([
+      supabase.from('settings').select('push_subscription').eq('driver_id', data.driver_id).single(),
+      supabase.from('drivers').select('email').eq('id', data.driver_id).single(),
+    ])
 
+    const driverEmail = driverRow?.email
     if (settingsRow?.push_subscription) {
       const sub = settingsRow.push_subscription as Parameters<typeof sendPush>[0]
       if (body.status === 'cancelled') {
@@ -92,21 +92,21 @@ export async function PATCH(
           body: `${data.client_name} canceló su viaje`,
           tag: 'cancelled',
         })
-        await emailCancelacion(data)
+        await emailCancelacion(data, driverEmail)
       } else if (body.pending_changes != null) {
         await sendPush(sub, {
           title: 'Cliente propuso cambios ✏️',
           body: `${data.client_name} modificó un viaje aceptado`,
           tag: 'pending-changes',
         })
-        await emailCambiosPropuestos(data)
+        await emailCambiosPropuestos(data, driverEmail)
       } else if (body.status === 'pending') {
         await sendPush(sub, {
           title: 'Pedido modificado 🕐',
           body: `${data.client_name} cambió su viaje`,
           tag: 'modified',
         })
-        await emailPedidoModificado(data)
+        await emailPedidoModificado(data, driverEmail)
       }
     }
   }
