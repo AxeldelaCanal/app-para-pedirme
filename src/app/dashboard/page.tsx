@@ -177,8 +177,9 @@ export default function Dashboard() {
     setLoading(false)
   }, [])
 
-  async function registerPushSubscription(): Promise<boolean> {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
+  async function registerPushSubscription(): Promise<{ ok: boolean; error?: string }> {
+    if (!('serviceWorker' in navigator)) return { ok: false, error: 'Tu navegador no soporta Service Workers.' }
+    if (!('PushManager' in window)) return { ok: false, error: 'Tu navegador no soporta Push Notifications.' }
     try {
       const reg = await navigator.serviceWorker.register('/sw.js')
       await navigator.serviceWorker.ready
@@ -198,12 +199,13 @@ export default function Dashboard() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         console.error('[push] /api/push falló:', res.status, err)
-        return false
+        return { ok: false, error: `Error al guardar suscripción: ${err.error ?? res.status}` }
       }
-      return true
+      return { ok: true }
     } catch (err) {
       console.error('[push] Error registrando suscripción:', err)
-      return false
+      const msg = err instanceof Error ? err.message : String(err)
+      return { ok: false, error: `Error al suscribirse: ${msg}` }
     }
   }
 
@@ -211,7 +213,8 @@ export default function Dashboard() {
     const permission = await Notification.requestPermission()
     setNotifPermission(permission)
     if (permission === 'granted') {
-      await registerPushSubscription()
+      const result = await registerPushSubscription()
+      if (!result.ok) alert(result.error)
     }
   }
 
@@ -498,9 +501,16 @@ export default function Dashboard() {
           {notifPermission === 'granted' && (
             <button onClick={async () => {
               setShowMenu(false)
+              // Intentar registrar primero por si la suscripción no está en DB
+              const reg = await registerPushSubscription()
+              if (!reg.ok) {
+                alert(`No se pudo registrar el dispositivo:\n\n${reg.error}`)
+                return
+              }
               const res = await fetch('/api/push/test', { method: 'POST' })
               const d = await res.json()
-              if (!res.ok) alert(`Error: ${d.error}`)
+              if (!res.ok) alert(`Error al enviar notificación:\n\n${d.error}`)
+              else alert('✅ Notificación enviada. ¿La recibiste?')
             }}
               className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               🔔 Probar
