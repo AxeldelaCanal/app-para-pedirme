@@ -177,8 +177,8 @@ export default function Dashboard() {
     setLoading(false)
   }, [])
 
-  async function registerPushSubscription() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+  async function registerPushSubscription(): Promise<boolean> {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
     try {
       const reg = await navigator.serviceWorker.register('/sw.js')
       await navigator.serviceWorker.ready
@@ -189,13 +189,21 @@ export default function Dashboard() {
         applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '') as unknown as ArrayBuffer,
       })
 
-      await fetch('/api/push', {
+      const res = await fetch('/api/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sub),
       })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error('[push] /api/push falló:', res.status, err)
+        return false
+      }
+      return true
     } catch (err) {
       console.error('[push] Error registrando suscripción:', err)
+      return false
     }
   }
 
@@ -223,7 +231,8 @@ export default function Dashboard() {
     if ('Notification' in window) {
       setNotifPermission(Notification.permission)
       if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(console.error)
+        // Auto-registrar suscripción push en cada carga para asegurar que esté guardada en DB
+        registerPushSubscription()
       }
     }
 
@@ -486,6 +495,17 @@ export default function Dashboard() {
             className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
             QR
           </button>
+          {notifPermission === 'granted' && (
+            <button onClick={async () => {
+              setShowMenu(false)
+              const res = await fetch('/api/push/test', { method: 'POST' })
+              const d = await res.json()
+              if (!res.ok) alert(`Error: ${d.error}`)
+            }}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              🔔 Probar
+            </button>
+          )}
           <button onClick={() => { setShowSettings(s => !s); setShowMenu(false) }}
             className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
             Tarifas
