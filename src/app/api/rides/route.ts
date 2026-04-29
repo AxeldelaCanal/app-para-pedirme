@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       .single()
 
     if (driver_slug !== 'demo') {
+      console.log(`[rides POST] driver=${driver_slug} email=${driver.email} hasPush=${!!settingsRow?.push_subscription}`)
       if (settingsRow?.push_subscription) {
         const dests = data.destinations?.length ? data.destinations : [{ address: data.destination }]
         const lastDest = dests[dests.length - 1].address

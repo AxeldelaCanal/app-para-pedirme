@@ -84,36 +84,34 @@ export async function PATCH(
     ])
 
     const driverEmail = driverRow?.email
+    console.log(`[rides PATCH] driver_id=${data.driver_id} email=${driverEmail} hasPush=${!!settingsRow?.push_subscription} action=${body.status ?? 'pending_changes'}`)
+
+    // Push — solo si hay suscripción
     if (settingsRow?.push_subscription) {
       const sub = settingsRow.push_subscription as Parameters<typeof sendPush>[0]
       let pushResult = { expired: false }
 
       if (body.status === 'cancelled') {
-        pushResult = await sendPush(sub, {
-          title: 'Viaje cancelado ❌',
-          body: `${data.client_name} canceló su viaje`,
-          tag: 'cancelled',
-        })
-        await emailCancelacion(data, driverEmail)
+        pushResult = await sendPush(sub, { title: 'Viaje cancelado ❌', body: `${data.client_name} canceló su viaje`, tag: 'cancelled' })
       } else if (body.pending_changes != null) {
-        pushResult = await sendPush(sub, {
-          title: 'Cliente propuso cambios ✏️',
-          body: `${data.client_name} modificó un viaje aceptado`,
-          tag: 'pending-changes',
-        })
-        await emailCambiosPropuestos(data, driverEmail)
+        pushResult = await sendPush(sub, { title: 'Cliente propuso cambios ✏️', body: `${data.client_name} modificó un viaje aceptado`, tag: 'pending-changes' })
       } else if (body.status === 'pending') {
-        pushResult = await sendPush(sub, {
-          title: 'Pedido modificado 🕐',
-          body: `${data.client_name} cambió su viaje`,
-          tag: 'modified',
-        })
-        await emailPedidoModificado(data, driverEmail)
+        pushResult = await sendPush(sub, { title: 'Pedido modificado 🕐', body: `${data.client_name} cambió su viaje`, tag: 'modified' })
       }
 
       if (pushResult.expired) {
+        console.log(`[rides PATCH] suscripción expirada, limpiando driver_id=${data.driver_id}`)
         await supabase.from('settings').update({ push_subscription: null }).eq('driver_id', data.driver_id)
       }
+    }
+
+    // Email — siempre, independiente del push
+    if (body.status === 'cancelled') {
+      await emailCancelacion(data, driverEmail)
+    } else if (body.pending_changes != null) {
+      await emailCambiosPropuestos(data, driverEmail)
+    } else if (body.status === 'pending') {
+      await emailPedidoModificado(data, driverEmail)
     }
   }
 

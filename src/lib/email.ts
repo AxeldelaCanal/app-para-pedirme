@@ -20,9 +20,11 @@ function rideStops(ride: Ride) {
 }
 
 export async function emailNuevoPedido(ride: Ride, driverEmail?: string) {
+  const to = driverEmail ?? FALLBACK_TO
+  console.log(`[email] emailNuevoPedido → to=${to} from=${FROM}`)
   await resend.emails.send({
     from: FROM,
-    to: driverEmail ?? FALLBACK_TO,
+    to,
     subject: `🚗 Nuevo pedido — ${ride.client_name}`,
     html: `
       <h2>Nuevo pedido de viaje</h2>
@@ -35,7 +37,7 @@ export async function emailNuevoPedido(ride: Ride, driverEmail?: string) {
       <br>
       <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="background:#10b981;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Ver en el panel</a>
     `,
-  }).catch(err => console.error('[email] emailNuevoPedido:', err))
+  }).then(r => console.log('[email] emailNuevoPedido result:', JSON.stringify(r))).catch(err => console.error('[email] emailNuevoPedido ERROR:', err))
 }
 
 export async function emailCancelacion(ride: Ride, driverEmail?: string) {
