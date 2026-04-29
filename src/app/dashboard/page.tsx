@@ -434,6 +434,17 @@ export default function Dashboard() {
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-10 safe-top">
         <div className="flex items-center gap-2 min-w-0">
+          {driver?.slug && (
+            <a
+              href={`/${driver.slug}`}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 w-9 h-9 flex items-center justify-center text-gray-500 dark:text-gray-400 shrink-0"
+              aria-label="Volver a la app"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </a>
+          )}
           <h1 className="font-bold text-gray-900 dark:text-white truncate">Mis pedidos</h1>
           {pendingCount > 0 && (
             <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-bold text-white shrink-0">

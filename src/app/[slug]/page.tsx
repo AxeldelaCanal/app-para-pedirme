@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import BookingForm from '@/components/BookingForm'
 import InstallButton from '@/components/InstallButton'
-import DriverSection from '@/components/DriverSection'
+import ClientView from '@/components/ClientView'
 
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
@@ -50,13 +49,7 @@ export default async function DriverPage({ params }: { params: Promise<{ slug: s
         </div>
       </div>
 
-      <div className="relative -mt-6 px-4 pb-6">
-        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-2xl p-6 overflow-hidden">
-          <BookingForm driverSlug={slug} />
-        </div>
-      </div>
-
-      <DriverSection />
+      <ClientView driverSlug={slug} />
     </main>
   )
 }
