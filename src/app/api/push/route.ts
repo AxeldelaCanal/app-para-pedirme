@@ -8,16 +8,22 @@ export async function POST(req: Request) {
 
   const subscription = await req.json()
 
-  const { error } = await supabase
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  console.log(`[push POST] driverId=${driverId} hasServiceKey=${!!serviceKey} keyPrefix=${serviceKey?.slice(0, 10)}`)
+
+  const { data, error } = await supabase
     .from('settings')
     .update({ push_subscription: subscription })
     .eq('driver_id', driverId)
+    .select('driver_id')
+
+  console.log(`[push POST] update result: rowsAffected=${data?.length ?? 0} error=${error?.message ?? 'none'}`)
 
   if (error) {
     console.error('[push POST] update error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, rowsAffected: data?.length ?? 0 })
 }
 
 export async function DELETE() {
