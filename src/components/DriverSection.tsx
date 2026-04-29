@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -20,6 +20,11 @@ type View = 'login' | 'register'
 export default function DriverSection() {
   const router = useRouter()
   const [view, setView] = useState<View>('login')
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => setLoggedIn(r.ok)).catch(() => setLoggedIn(false))
+  }, [])
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
   const [loginError, setLoginError] = useState('')
@@ -81,6 +86,22 @@ export default function DriverSection() {
   const canRegister = regForm.name && slugValid && regForm.email && regForm.password.length >= 6
 
   const inputCls = 'w-full rounded-xl bg-slate-700/50 border border-slate-600/50 px-4 py-3 text-sm text-white placeholder:text-slate-400 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30'
+
+  if (loggedIn === null) return null
+
+  if (loggedIn) return (
+    <div className="max-w-md mx-auto">
+      <div className="bg-slate-800/80 border border-slate-700/50 rounded-3xl shadow-2xl overflow-hidden p-6 flex flex-col items-center gap-4">
+        <p className="text-white font-semibold">Sesión activa</p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="w-full rounded-xl bg-emerald-500 py-3.5 text-sm font-semibold text-white"
+        >
+          Ir al panel →
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="max-w-md mx-auto">
