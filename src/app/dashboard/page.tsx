@@ -184,10 +184,13 @@ export default function Dashboard() {
       const reg = await navigator.serviceWorker.register('/sw.js')
       await navigator.serviceWorker.ready
 
+      const vapidKey = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '').trim()
+      if (!vapidKey) return { ok: false, error: 'VAPID key no configurada. Contactá al administrador.' }
+
       const existing = await reg.pushManager.getSubscription()
       const sub = existing ?? await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '') as unknown as ArrayBuffer,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey) as unknown as ArrayBuffer,
       })
 
       const res = await fetch('/api/push', {
