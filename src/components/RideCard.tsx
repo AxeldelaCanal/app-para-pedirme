@@ -171,6 +171,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
     if (app === 'gmaps') {
       const ua = navigator.userAgent
       if (/iPhone|iPad|iPod/i.test(ua)) return `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
+      if (/Android/i.test(ua)) return `geo:${lat},${lng}?q=${lat},${lng}`
       return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
     }
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
