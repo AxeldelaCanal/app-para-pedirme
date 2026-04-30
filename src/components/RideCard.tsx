@@ -174,7 +174,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       if (/Android/i.test(ua)) return `geo:${lat},${lng}?q=${lat},${lng}`
       return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
     }
-    if (/Android/i.test(navigator.userAgent)) return `waze://ul?ll=${lat},${lng}&navigate=yes`
+    if (/Android/i.test(navigator.userAgent)) return `waze://?ll=${lat},${lng}&navigate=yes`
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
   }
 
