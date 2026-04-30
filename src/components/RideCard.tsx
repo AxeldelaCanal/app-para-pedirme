@@ -171,7 +171,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
     if (app === 'gmaps') {
       const ua = navigator.userAgent
       if (/iPhone|iPad|iPod/i.test(ua)) return `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
-      if (/Android/i.test(ua)) return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
+      if (/Android/i.test(ua)) return `geo:${lat},${lng}?q=${lat},${lng}`
       return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
     }
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
@@ -180,6 +180,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
   function openNav(url: string) {
     const a = document.createElement('a')
     a.href = url
+    a.target = '_blank'
     a.rel = 'noopener noreferrer'
     document.body.appendChild(a)
     a.click()
