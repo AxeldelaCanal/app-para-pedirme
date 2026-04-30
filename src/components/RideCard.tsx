@@ -74,6 +74,18 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
   }
 
   // ── WhatsApp ───────────────────────────────────────────────────────────
+  function buildWaUrl(phone: string, msg: string) {
+    const encoded = encodeURIComponent(msg)
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
+      return `whatsapp://send?phone=${phone}&text=${encoded}`
+    return `https://wa.me/${phone}?text=${encoded}`
+  }
+
+  function openWA(url: string) {
+    if (!url.startsWith('http')) { window.location.href = url; return }
+    window.open(url, '_blank')
+  }
+
   function buildWaLink(status: RideStatus) {
     const phone = `54${ride.client_phone.replace(/\D/g, '')}`
     const cancelLink = `${window.location.origin}/confirmation/${ride.id}`
@@ -88,7 +100,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
     const msg = status === 'accepted'
       ? `¡Hola ${ride.client_name}! ✅ Confirmé tu viaje para el ${dateStr} a las ${timeStr}.\n📍 Origen: ${ride.origin}\n${routeText}\n💰 Total: $${ride.price_ars.toLocaleString('es-AR')}\n\nTe espero puntual. Cualquier consulta escribime acá.\n\n🔗 Si necesitás cancelar o modificar: ${cancelLink}`
       : `Hola ${ride.client_name} 😔 Lamentablemente no voy a poder tomar tu viaje del ${dateStr} a las ${timeStr}.\n\nTe recomiendo reagendar para otro horario o día. ¡Disculpá los inconvenientes!`
-    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+    return buildWaUrl(phone, msg)
   }
 
   // ── Pending changes ────────────────────────────────────────────────────
@@ -119,7 +131,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
         const ds = sd.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })
         const ts = sd.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
         const msg = `¡Hola ${updated.client_name}! ✅ Acepté los cambios a tu viaje del ${ds} a las ${ts}.\n📍 Origen: ${updated.origin}\n${routeText}\n💰 Total: $${updated.price_ars.toLocaleString('es-AR')}`
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+        openWA(buildWaUrl(phone, msg))
       }
     } finally {
       setLoading(false)
@@ -153,7 +165,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       })
       onStatusChange(ride.id, status)
       if (status === 'accepted' || status === 'rejected') {
-        window.open(buildWaLink(status), '_blank')
+        openWA(buildWaLink(status))
       }
     } finally {
       setLoading(false)
@@ -456,9 +468,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
               </button>
               {conflictState.suggestedAt && (
                 <a
-                  href={`https://wa.me/54${ride.client_phone.replace(/\D/g, '')}?text=${encodeURIComponent(
-                    `Hola ${ride.client_name}, puedo llevarte pero el horario disponible sería a las ${conflictState.suggestedAt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}. ¿Te viene bien?`
-                  )}`}
+                  href={buildWaUrl(`54${ride.client_phone.replace(/\D/g, '')}`, `Hola ${ride.client_name}, puedo llevarte pero el horario disponible sería a las ${conflictState.suggestedAt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}. ¿Te viene bien?`)}
                   target="_blank" rel="noopener noreferrer"
                   className="flex-1 rounded-lg bg-[#25D366] py-2 text-xs font-semibold text-white text-center">
                   Sugerir horario
@@ -516,7 +526,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
 
               {ride.status === 'cancelled' && (
                 <a
-                  href={`https://wa.me/54${ride.client_phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${ride.client_name}, vi que cancelaste el viaje. ¿Puedo ayudarte en algo?`)}`}
+                  href={buildWaUrl(`54${ride.client_phone.replace(/\D/g, '')}`, `Hola ${ride.client_name}, vi que cancelaste el viaje. ¿Puedo ayudarte en algo?`)}
                   target="_blank" rel="noopener noreferrer"
                   className="rounded-lg bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-white">
                   Contactar
