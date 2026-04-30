@@ -178,6 +178,10 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
   }
 
   function openNav(url: string) {
+    if (!url.startsWith('http')) {
+      window.location.href = url
+      return
+    }
     const a = document.createElement('a')
     a.href = url
     a.target = '_blank'
