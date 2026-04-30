@@ -177,6 +177,15 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
   }
 
+  function openNav(url: string) {
+    const a = document.createElement('a')
+    a.href = url
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
   // ── Nav step persistence ───────────────────────────────────────────────
   function setPersistedNavStep(step: 'navigate' | 'arrived') {
     setNavStep(step)
@@ -223,7 +232,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       const target = current === null
         ? { lat: ride.origin_lat, lng: ride.origin_lng }
         : dests[current] ?? null
-      if (target) window.open(navUrl(target.lat, target.lng), '_blank')
+      if (target) openNav(navUrl(target.lat, target.lng))
       setPersistedNavStep('arrived')
       return
     }
