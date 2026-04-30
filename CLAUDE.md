@@ -28,11 +28,12 @@ Multi-driver platform. Two surfaces sharing the same Next.js 15 App Router app:
 - `/registro` → creates driver account + rows in `drivers` + `settings` → sends verification email → redirects to `/dashboard/verify-email`
 - `/dashboard/verify-email` → static "check your email" page
 - `/dashboard/verify-email/[token]` → auto-verifies on mount, sets cookie, redirects to `/dashboard`
-- `/dashboard/login` → email + password → sets `driver_id` cookie (session or 30-day depending on "remember me")
+- `/dashboard/login` → email + password → sets 30-day `driver_id` cookie
 - `/dashboard/forgot-password` + `/dashboard/reset-password/[token]` → password reset via email token
 
-**Driver dashboard** (`/dashboard`) — protected by `driver_id` cookie via `src/middleware.ts`
-- `/dashboard` → ride list, filters, stats, settings panel, account panel; polls every 10s + Supabase Realtime
+**Driver dashboard** (`/dashboard`) — protected by `driver_id` cookie via `src/proxy.ts`
+- `/dashboard` → ride list, filters, stats; ⚙ button opens a bottom sheet with all settings (tarifas, nav app, dark mode, QR, account, logout); polls every 10s + Supabase Realtime
+- Floating QR button (bottom-right) opens a modal with shareable booking link
 - Back button `←` links to driver's own `/{slug}` booking page
 
 ## Data flow
@@ -66,8 +67,9 @@ When a client edits an **accepted** ride that **has not started** (`current_stop
 ## Auth (`src/lib/auth.ts`)
 
 `getDriverId()` reads the `driver_id` httpOnly cookie. All protected API routes call this.  
-`src/middleware.ts` guards `/dashboard/*` (except login, forgot-password, reset-password, verify-email routes).  
-`/api/auth` POST/DELETE — login (checks `email_verified`, returns 403 with `{ unverified: true }` if not)/logout.  
+`src/proxy.ts` — Next.js middleware that guards `/dashboard/*` (except login, forgot-password, reset-password, verify-email routes). Exports `proxy` as the middleware function and `config` with the matcher.  
+`driver_id` cookie: `httpOnly`, `secure`, `sameSite: 'lax'`, `path: '/'`, 30-day `maxAge`. Must be `lax` (not `strict`) so notification clicks from a closed browser restore the session correctly.  
+`/api/auth` POST/DELETE — login/logout.  
 `/api/auth/register` POST — creates driver + settings row, sends verification email, does NOT auto-login.  
 `/api/auth/verify-email` POST — verifies token, sets `driver_id` cookie.  
 `/api/auth/me` GET/PATCH/DELETE — profile, change password or email (both require current password), delete account.  
@@ -92,6 +94,7 @@ Two layers, both triggered server-side from `POST /api/rides` and `PATCH /api/ri
 - **Web Push** (`src/lib/push.ts`) — VAPID via `web-push`. `sendPush()` returns `{ expired: boolean }`; caller must clear `push_subscription` from DB on `expired: true`. Service Worker at `public/sw.js` suppresses notification if window is focused.
 - Push subscription is saved via `POST /api/push` and tested via `POST /api/push/test`.
 - Dashboard auto-registers push subscription on load if `Notification.permission === 'granted'`.
+- `notificationclick` in `public/sw.js` uses `self.registration.scope + 'dashboard'` (absolute URL) to avoid PWA context resolution issues.
 
 ## PWA
 
@@ -101,6 +104,17 @@ Two layers, both triggered server-side from `POST /api/rides` and `PATCH /api/ri
 - `/{slug}/page.tsx` overrides the manifest link via `generateMetadata` to point to the per-slug dynamic manifest
 
 `InstallButton` handles `beforeinstallprompt`. `PWAFix` uses localStorage timestamp to force reload after 30s background (fixes iOS blank screen).
+
+## LocalStorage keys
+
+All keys are per-device (not synced to DB):
+- `darkMode` — `'true'` | absent
+- `nav_app` — `'waze'` | `'gmaps'` (default: waze); used by `RideCard` at navigation click time
+- `nav_{rideId}` — `'arrived'` | absent; persists the nav step state per active ride
+
+## Scheduling & conflict detection (`src/lib/scheduling.ts`)
+
+`detectConflict(newRide, acceptedRides)` — checks if a new ride overlaps with the last accepted ride using `haversineKm` for estimated travel time between the previous drop-off and the new pick-up. Returns `{ conflict, gapMin, suggestedAt? }`. `RideCard` calls this before accepting a ride and shows a warning with a suggested time if there's a conflict.
 
 ## Environment variables
 
