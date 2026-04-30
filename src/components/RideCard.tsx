@@ -168,7 +168,12 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
 
   function navUrl(lat: number, lng: number) {
     const app = localStorage.getItem('nav_app') ?? 'waze'
-    if (app === 'gmaps') return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
+    if (app === 'gmaps') {
+      const ua = navigator.userAgent
+      if (/iPhone|iPad|iPod/i.test(ua)) return `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
+      if (/Android/i.test(ua)) return `google.navigation:q=${lat},${lng}`
+      return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
+    }
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
   }
 
