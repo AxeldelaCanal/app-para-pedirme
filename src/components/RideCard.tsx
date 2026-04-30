@@ -168,27 +168,18 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
 
   function navUrl(lat: number, lng: number) {
     const app = localStorage.getItem('nav_app') ?? 'waze'
+    const t = Date.now()
     if (app === 'gmaps') {
       const ua = navigator.userAgent
       if (/iPhone|iPad|iPod/i.test(ua)) return `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`
-      if (/Android/i.test(ua)) return `geo:${lat},${lng}?q=${lat},${lng}`
+      if (/Android/i.test(ua)) return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving&_t=${t}`
       return `https://maps.google.com/maps?daddr=${lat},${lng}&directionsmode=driving`
     }
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
   }
 
   function openNav(url: string) {
-    if (!url.startsWith('http')) {
-      window.location.href = url
-      return
-    }
-    const a = document.createElement('a')
-    a.href = url
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    window.location.href = url
   }
 
   // ── Nav step persistence ───────────────────────────────────────────────
