@@ -68,11 +68,9 @@ export default function Dashboard() {
   const [settings, setSettings] = useState<Omit<Settings, 'id' | 'updated_at'>>(DEFAULT_SETTINGS)
   const [driver, setDriver] = useState<Pick<Driver, 'name' | 'slug' | 'email'> | null>(null)
   const [navApp, setNavApp] = useState<'waze' | 'gmaps'>('waze')
-  const [showSettings, setShowSettings] = useState(false)
-  const [showAccount, setShowAccount] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+  const [showSheet, setShowSheet] = useState(false)
   const [showQR, setShowQR] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [savingSettings, setSavingSettings] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [passwordError, setPasswordError] = useState('')
@@ -388,7 +386,6 @@ export default function Dashboard() {
       body: JSON.stringify(settings),
     })
     setSavingSettings(false)
-    setShowSettings(false)
   }
 
   const STATUS_ORDER: Record<RideStatus, number> = { pending: 0, accepted: 1, completed: 2, cancelled: 3, rejected: 4 }
@@ -483,202 +480,228 @@ export default function Dashboard() {
             {darkMode ? '☀️' : '🌙'}
           </button>
           <button
-            onClick={() => { setShowFilters(s => !s); setShowMenu(false) }}
+            onClick={() => setShowFilters(s => !s)}
             className={`rounded-lg border w-9 h-9 flex items-center justify-center text-base font-bold transition-colors ${
               hasActiveFilters ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
             }`}>
             {hasActiveFilters ? '≡·' : '≡'}
           </button>
           <button
-            onClick={() => setShowMenu(s => !s)}
+            onClick={() => setShowSheet(s => !s)}
             className="rounded-lg border border-gray-200 dark:border-gray-700 w-9 h-9 flex items-center justify-center text-gray-700 dark:text-gray-300">
             ⚙
           </button>
         </div>
       </header>
 
-      {/* Menú desplegable */}
-      {showMenu && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex flex-wrap gap-2">
-          <button onClick={() => { setShowQR(s => !s); setShowMenu(false) }}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            QR
-          </button>
-          {notifPermission === 'granted' && (
-            <button onClick={async () => {
-              setShowMenu(false)
-              // Intentar registrar primero por si la suscripción no está en DB
-              const reg = await registerPushSubscription()
-              if (!reg.ok) {
-                alert(`No se pudo registrar el dispositivo:\n\n${reg.error}`)
-                return
-              }
-              const res = await fetch('/api/push/test', { method: 'POST' })
-              const d = await res.json()
-              if (!res.ok) alert(`Error al enviar notificación:\n\n${d.error}`)
-              else alert('✅ Notificación enviada. ¿La recibiste?')
-            }}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              🔔 Probar
+      {/* Bottom Sheet Backdrop */}
+      {showSheet && (
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowSheet(false)} />
+      )}
+
+      {/* Bottom Sheet */}
+      <div className={`fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out max-h-[88vh] flex flex-col ${showSheet ? 'translate-y-0' : 'translate-y-full'}`}>
+        {/* Handle + Header */}
+        <div className="shrink-0">
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
+            <h2 className="font-bold text-gray-900 dark:text-white text-base">Ajustes</h2>
+            <button onClick={() => setShowSheet(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-base font-bold">
+              ✕
             </button>
-          )}
-          <button onClick={() => { setShowSettings(s => !s); setShowMenu(false) }}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Tarifas
-          </button>
-          <button onClick={() => { setShowAccount(s => !s); setShowMenu(false) }}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Cuenta
-          </button>
-          <button onClick={logout}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400">
-            Salir
-          </button>
+          </div>
         </div>
-      )}
 
-      {/* QR Panel */}
-      {showQR && driver && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-5 flex flex-col items-center gap-4">
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">Tu link de reservas</p>
-          <QRCodeSVG
-            value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
-            size={180}
-            bgColor={darkMode ? '#111827' : '#ffffff'}
-            fgColor={darkMode ? '#ffffff' : '#0f172a'}
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center break-all">
-            {typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/{driver.slug}
-          </p>
-          <button
-            onClick={() => navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`)}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Copiar link
-          </button>
-        </div>
-      )}
+        {/* Scrollable content */}
+        <div className="overflow-y-auto flex-1 px-5 py-5 flex flex-col gap-7">
 
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4">
-          <h2 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">Configurar tarifas (ARS)</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {(['base_fare', 'price_per_km', 'price_per_min', 'booking_fee'] as const).map((key) => (
-              <div key={key} className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500 dark:text-gray-400">
-                  {key === 'base_fare' ? 'Tarifa base' : key === 'price_per_km' ? 'Por km' : key === 'price_per_min' ? 'Por minuto' : 'Cargo reserva'}
-                </label>
-                <input type="number" value={settings[key]}
-                  onChange={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
-                  className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
+          {/* Conductor */}
+          {driver && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Conductor</p>
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-3">
+                <p className="font-semibold text-gray-900 dark:text-white text-sm">{driver.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{driver.email}</p>
               </div>
-            ))}
-          </div>
-          <div className="flex flex-col gap-1 mt-3">
-            <label className="text-xs text-gray-500 dark:text-gray-400">Tu teléfono (para cancelaciones)</label>
-            <input type="tel" placeholder="2235304242" value={settings.driver_phone ?? ''}
-              onChange={e => setSettings(s => ({ ...s, driver_phone: e.target.value }))}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-            />
-          </div>
-          <div className="flex flex-col gap-1 mt-3">
-            <label className="text-xs text-gray-500 dark:text-gray-400">App de navegación</label>
-            <div className="flex gap-2">
-              {(['waze', 'gmaps'] as const).map(app => (
-                <button key={app}
-                  onClick={() => { localStorage.setItem('nav_app', app); setNavApp(app) }}
-                  className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${navApp === app ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
-                  {app === 'waze' ? 'Waze' : 'Google Maps'}
-                </button>
+            </div>
+          )}
+
+          {/* Tarifas */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Tarifas (ARS)</p>
+            <div className="grid grid-cols-2 gap-3">
+              {(['base_fare', 'price_per_km', 'price_per_min', 'booking_fee'] as const).map((key) => (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-500 dark:text-gray-400">
+                    {key === 'base_fare' ? 'Tarifa base' : key === 'price_per_km' ? 'Por km' : key === 'price_per_min' ? 'Por minuto' : 'Cargo reserva'}
+                  </label>
+                  <input type="number" value={settings[key]}
+                    onChange={e => setSettings(s => ({ ...s, [key]: Number(e.target.value) }))}
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  />
+                </div>
               ))}
             </div>
-          </div>
-          <button onClick={saveSettings} disabled={savingSettings}
-            className="mt-3 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-            {savingSettings ? 'Guardando...' : 'Guardar tarifas'}
-          </button>
-        </div>
-      )}
-
-      {/* Account Panel */}
-      {showAccount && (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-4 flex flex-col gap-5">
-          {/* Email actual */}
-          {driver?.email && (
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Email actual</p>
-              <p className="text-sm text-gray-900 dark:text-white font-medium">{driver.email}</p>
-            </div>
-          )}
-
-          {/* Cambiar email */}
-          <div className="flex flex-col gap-2">
-            <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar email</h2>
-            <input type="email" placeholder="Nuevo email"
-              value={emailForm.newEmail}
-              onChange={e => setEmailForm(f => ({ ...f, newEmail: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-            />
-            <input type="password" placeholder="Contraseña actual (para confirmar)"
-              value={emailForm.currentPassword}
-              onChange={e => setEmailForm(f => ({ ...f, currentPassword: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
-            />
-            {emailError && <p className="text-xs text-red-500">{emailError}</p>}
-            {emailOk && <p className="text-xs text-emerald-600 font-medium">Email actualizado correctamente</p>}
-            <button onClick={changeEmail} disabled={savingEmail || !emailForm.newEmail || !emailForm.currentPassword}
-              className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-              {savingEmail ? 'Guardando...' : 'Actualizar email'}
-            </button>
-          </div>
-
-          {/* Cambiar contraseña */}
-          <div className="flex flex-col gap-2 border-t border-gray-100 dark:border-gray-800 pt-4">
-            <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar contraseña</h2>
-            {(['current', 'next', 'confirm'] as const).map((field) => (
-              <input key={field} type="password"
-                placeholder={field === 'current' ? 'Contraseña actual' : field === 'next' ? 'Nueva contraseña' : 'Repetir nueva contraseña'}
-                value={passwordForm[field]}
-                onChange={e => setPasswordForm(f => ({ ...f, [field]: e.target.value }))}
-                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            <div className="flex flex-col gap-1 mt-3">
+              <label className="text-xs text-gray-500 dark:text-gray-400">Tu teléfono (para cancelaciones)</label>
+              <input type="tel" placeholder="2235304242" value={settings.driver_phone ?? ''}
+                onChange={e => setSettings(s => ({ ...s, driver_phone: e.target.value }))}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
               />
-            ))}
-            {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
-            {passwordOk && <p className="text-xs text-emerald-600 font-medium">Contraseña actualizada correctamente</p>}
-            <button onClick={changePassword} disabled={savingPassword || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
-              className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-              {savingPassword ? 'Guardando...' : 'Actualizar contraseña'}
+            </div>
+            <button onClick={saveSettings} disabled={savingSettings}
+              className="mt-3 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+              {savingSettings ? 'Guardando...' : 'Guardar tarifas'}
             </button>
           </div>
 
-          {/* Zona de peligro */}
-          <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
-            <h2 className="font-semibold text-red-600 text-sm mb-2">Zona de peligro</h2>
-            {!confirmDeleteAccount ? (
-              <button onClick={() => setConfirmDeleteAccount(true)}
-                className="w-full rounded-xl border border-red-200 dark:border-red-900 py-2.5 text-sm font-semibold text-red-600">
-                Eliminar mi cuenta
-              </button>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs text-red-500">Esto elimina tu cuenta y todos tus viajes. No tiene vuelta atrás.</p>
+          {/* Preferencias */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Preferencias</p>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-500 dark:text-gray-400">App de navegación</label>
                 <div className="flex gap-2">
-                  <button onClick={() => setConfirmDeleteAccount(false)}
-                    className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300">
-                    Cancelar
-                  </button>
-                  <button onClick={deleteAccount} disabled={deletingAccount}
-                    className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
-                    {deletingAccount ? 'Eliminando...' : 'Sí, eliminar'}
-                  </button>
+                  {(['waze', 'gmaps'] as const).map(app => (
+                    <button key={app}
+                      onClick={() => { localStorage.setItem('nav_app', app); setNavApp(app) }}
+                      className={`flex-1 rounded-lg border py-2.5 text-sm font-medium transition-colors ${navApp === app ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                      {app === 'waze' ? 'Waze' : 'Google Maps'}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+              <div className="flex items-center justify-between py-1">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Modo oscuro</span>
+                <button onClick={toggleDark}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${darkMode ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* Herramientas */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Herramientas</p>
+            <div className="flex flex-col gap-2">
+              {driver && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-4 flex flex-col items-center gap-3">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Tu link de reservas</p>
+                  <QRCodeSVG
+                    value={`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`}
+                    size={160}
+                    bgColor={darkMode ? '#1f2937' : '#f9fafb'}
+                    fgColor={darkMode ? '#ffffff' : '#0f172a'}
+                  />
+                  <p className="text-xs text-gray-400 dark:text-gray-500 text-center break-all">
+                    {typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/{driver.slug}
+                  </p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')}/${driver.slug}`)}
+                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Copiar link
+                  </button>
+                </div>
+              )}
+              {notifPermission === 'granted' && (
+                <button onClick={async () => {
+                  const reg = await registerPushSubscription()
+                  if (!reg.ok) { alert(`No se pudo registrar el dispositivo:\n\n${reg.error}`); return }
+                  const res = await fetch('/api/push/test', { method: 'POST' })
+                  const d = await res.json()
+                  if (!res.ok) alert(`Error al enviar notificación:\n\n${d.error}`)
+                  else alert('✅ Notificación enviada. ¿La recibiste?')
+                }}
+                  className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 text-left">
+                  🔔 Probar notificación
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Cuenta */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Cuenta</p>
+            <div className="flex flex-col gap-5">
+              {/* Cambiar email */}
+              <div className="flex flex-col gap-2">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar email</h3>
+                <input type="email" placeholder="Nuevo email"
+                  value={emailForm.newEmail}
+                  onChange={e => setEmailForm(f => ({ ...f, newEmail: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                />
+                <input type="password" placeholder="Contraseña actual (para confirmar)"
+                  value={emailForm.currentPassword}
+                  onChange={e => setEmailForm(f => ({ ...f, currentPassword: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                />
+                {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+                {emailOk && <p className="text-xs text-emerald-600 font-medium">Email actualizado correctamente</p>}
+                <button onClick={changeEmail} disabled={savingEmail || !emailForm.newEmail || !emailForm.currentPassword}
+                  className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+                  {savingEmail ? 'Guardando...' : 'Actualizar email'}
+                </button>
+              </div>
+
+              {/* Cambiar contraseña */}
+              <div className="flex flex-col gap-2 border-t border-gray-100 dark:border-gray-800 pt-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Cambiar contraseña</h3>
+                {(['current', 'next', 'confirm'] as const).map((field) => (
+                  <input key={field} type="password"
+                    placeholder={field === 'current' ? 'Contraseña actual' : field === 'next' ? 'Nueva contraseña' : 'Repetir nueva contraseña'}
+                    value={passwordForm[field]}
+                    onChange={e => setPasswordForm(f => ({ ...f, [field]: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                  />
+                ))}
+                {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+                {passwordOk && <p className="text-xs text-emerald-600 font-medium">Contraseña actualizada correctamente</p>}
+                <button onClick={changePassword} disabled={savingPassword || !passwordForm.current || !passwordForm.next || !passwordForm.confirm}
+                  className="w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+                  {savingPassword ? 'Guardando...' : 'Actualizar contraseña'}
+                </button>
+              </div>
+
+              {/* Zona de peligro */}
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                <h3 className="font-semibold text-red-600 text-sm mb-2">Zona de peligro</h3>
+                {!confirmDeleteAccount ? (
+                  <button onClick={() => setConfirmDeleteAccount(true)}
+                    className="w-full rounded-xl border border-red-200 dark:border-red-900 py-2.5 text-sm font-semibold text-red-600">
+                    Eliminar mi cuenta
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-red-500">Esto elimina tu cuenta y todos tus viajes. No tiene vuelta atrás.</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setConfirmDeleteAccount(false)}
+                        className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300">
+                        Cancelar
+                      </button>
+                      <button onClick={deleteAccount} disabled={deletingAccount}
+                        className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
+                        {deletingAccount ? 'Eliminando...' : 'Sí, eliminar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Cerrar sesión */}
+          <button onClick={logout}
+            className="w-full rounded-xl border border-red-200 dark:border-red-900 py-3 text-sm font-semibold text-red-600 dark:text-red-400">
+            Cerrar sesión
+          </button>
+
         </div>
-      )}
+      </div>
 
       {/* Filters Panel */}
       {showFilters && (
