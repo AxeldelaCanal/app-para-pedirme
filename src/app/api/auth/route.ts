@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   const res = NextResponse.json({ ok: true })
   res.cookies.set('driver_id', driver.id, {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax',
     secure: true,
     path: '/',
     maxAge: 60 * 60 * 24 * 30,
