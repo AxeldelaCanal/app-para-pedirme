@@ -41,7 +41,7 @@ Multi-driver platform. Two surfaces sharing the same Next.js 15 App Router app:
 1. Client submits form → `POST /api/rides` (body includes `driver_slug`) → resolves `driver_id` from `drivers` table → inserts into `rides` → sends email + push (skipped for `driver_slug === 'demo'`)
 2. `GET /api/price?waypoints=...&slug=...` → Google Maps Distance Matrix API (server-side) + `settings` table → returns `{ price_ars, distance_km, duration_min }`
 3. Dashboard polls `GET /api/rides` every 10s; Supabase Realtime fires on INSERT/UPDATE for instant updates; `prevRidesRef` tracks previous state to fire browser Notifications
-4. Driver actions (accept/reject/complete) → `PATCH /api/rides/[id]` → opens WhatsApp deep link with pre-filled message
+4. Driver actions (accept/reject/complete) → `PATCH /api/rides/[id]` → opens WhatsApp deep link with pre-filled message via `openWA()` / `buildWaUrl()`
 5. Client cancel/edit → `PATCH` with `status: 'cancelled'` or `pending_changes` → sends email to driver + push notification
 
 ## Key types (`src/types/index.ts`)
@@ -112,6 +112,24 @@ All keys are per-device (not synced to DB):
 - `nav_app` — `'waze'` | `'gmaps'` (default: waze); used by `RideCard` at navigation click time
 - `nav_{rideId}` — `'arrived'` | absent; persists the nav step state per active ride
 
+## Navigation deep links (`src/components/RideCard.tsx`)
+
+`navUrl(lat, lng)` builds the URL per platform. `openNav(url)` opens it: non-HTTPS schemes use `window.location.href` (OS intercepts at Intent level before Chrome), HTTPS uses `window.open(_blank)`.
+
+| Platform | Google Maps | Waze |
+|---|---|---|
+| Android | `geo:lat,lng?q=lat,lng` | `waze://?ll=lat,lng&navigate=yes` |
+| iOS | `comgooglemaps://?daddr=lat,lng&directionsmode=driving` | `waze://?ll=lat,lng&navigate=yes` |
+| Desktop | `https://maps.google.com/maps?daddr=lat,lng` | `https://waze.com/ul?ll=lat,lng&navigate=yes` |
+
+**Critical:** `window.open(_blank)` with HTTPS App Links only works for the first navigation in a PWA session — subsequent calls open Chrome Custom Tab. Always use native URI schemes (`geo:`, `waze://`, `comgooglemaps://`) on mobile.
+
+## WhatsApp deep links (`src/components/RideCard.tsx`)
+
+`buildWaUrl(phone, msg)` returns `whatsapp://send?phone=...&text=...` on mobile, `https://wa.me/...` on desktop. `openWA(url)` handles opening: non-HTTPS → `window.location.href`, HTTPS → `window.open(_blank)`.
+
+**Critical:** `window.open` after `await` loses the user gesture context on some Android devices (e.g. Moto G Power) — Chrome blocks it or opens in Custom Tab. Always use `openWA()` (not raw `window.open`) for WhatsApp links that follow async operations.
+
 ## Scheduling & conflict detection (`src/lib/scheduling.ts`)
 
 `detectConflict(newRide, acceptedRides)` — checks if a new ride overlaps with the last accepted ride using `haversineKm` for estimated travel time between the previous drop-off and the new pick-up. Returns `{ conflict, gapMin, suggestedAt? }`. `RideCard` calls this before accepting a ride and shows a warning with a suggested time if there's a conflict.
@@ -141,7 +159,7 @@ Slug `demo` (`/demo`) — notifications intentionally disabled. `POST /api/rides
 
 ## Commits
 
-A pre-commit hook (Gentleman Guardian Angel) runs AI code review on staged files. It may fail if the Claude API credit balance is low — use `--no-verify` only in that case.
+A pre-commit hook (Gentleman Guardian Angel) runs AI code review on staged files. **Never use `--no-verify`** — if the hook fails (e.g. low API credits), stop and inform the user.
 
 ## Notable patterns
 
