@@ -577,8 +577,8 @@ export default function Dashboard() {
               <div className="flex items-center justify-between py-1">
                 <span className="text-sm text-gray-700 dark:text-gray-300">Modo oscuro</span>
                 <button onClick={toggleDark}
-                  className={`w-12 h-6 rounded-full transition-colors relative ${darkMode ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                  className={`w-12 h-6 rounded-full transition-colors relative overflow-hidden ${darkMode ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${darkMode ? 'translate-x-[26px]' : 'translate-x-0.5'}`} />
                 </button>
               </div>
             </div>
