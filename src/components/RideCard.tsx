@@ -166,7 +166,9 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
     updateStatus('accepted')
   }
 
-  function wazeUrl(lat: number, lng: number) {
+  function navUrl(lat: number, lng: number) {
+    const app = localStorage.getItem('nav_app') ?? 'waze'
+    if (app === 'gmaps') return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`
     return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`
   }
 
@@ -216,7 +218,7 @@ export default function RideCard({ ride, acceptedRides, onStatusChange, onRideUp
       const target = current === null
         ? { lat: ride.origin_lat, lng: ride.origin_lng }
         : dests[current] ?? null
-      if (target) window.open(wazeUrl(target.lat, target.lng), '_blank')
+      if (target) window.open(navUrl(target.lat, target.lng), '_blank')
       setPersistedNavStep('arrived')
       return
     }

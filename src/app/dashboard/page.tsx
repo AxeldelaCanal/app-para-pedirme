@@ -67,6 +67,7 @@ export default function Dashboard() {
   const [period, setPeriod] = useState<Period>('all')
   const [settings, setSettings] = useState<Omit<Settings, 'id' | 'updated_at'>>(DEFAULT_SETTINGS)
   const [driver, setDriver] = useState<Pick<Driver, 'name' | 'slug' | 'email'> | null>(null)
+  const [navApp, setNavApp] = useState<'waze' | 'gmaps'>('waze')
   const [showSettings, setShowSettings] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
@@ -93,6 +94,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     setDarkMode(localStorage.getItem('darkMode') === 'true')
+    const saved = localStorage.getItem('nav_app')
+    if (saved === 'waze' || saved === 'gmaps') setNavApp(saved)
   }, [])
 
   function toggleDark() {
@@ -579,6 +582,18 @@ export default function Dashboard() {
               onChange={e => setSettings(s => ({ ...s, driver_phone: e.target.value }))}
               className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
             />
+          </div>
+          <div className="flex flex-col gap-1 mt-3">
+            <label className="text-xs text-gray-500 dark:text-gray-400">App de navegación</label>
+            <div className="flex gap-2">
+              {(['waze', 'gmaps'] as const).map(app => (
+                <button key={app}
+                  onClick={() => { localStorage.setItem('nav_app', app); setNavApp(app) }}
+                  className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${navApp === app ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                  {app === 'waze' ? 'Waze' : 'Google Maps'}
+                </button>
+              ))}
+            </div>
           </div>
           <button onClick={saveSettings} disabled={savingSettings}
             className="mt-3 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-semibold text-white disabled:opacity-40">
