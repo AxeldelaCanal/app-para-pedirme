@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import PWAFix from '@/components/PWAFix'
 import './globals.css'
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${geist.className} bg-white antialiased safe-x`}>
         <PWAFix />
         {children}
+        <SpeedInsights />
       </body>
     </html>
   )
